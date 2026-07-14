@@ -9,6 +9,7 @@ import { ExecutiveReport } from "./components/ExecutiveReport";
 import { ImportExport } from "./components/ImportExport";
 import { SetupLandingPage } from "./components/SetupLandingPage";
 import { SemanticQuery } from "./components/SemanticQuery";
+import { getCachedEmbedding, loadEmbeddingsIntoCache } from "./utils/embeddingsCache";
 import { 
   fetchLocalEmbeddings, 
   fetchLocalCompletion, 
@@ -40,7 +41,7 @@ import {
 
 export default function App() {
   // 1. Initial State Definition
-  const [comments, setComments] = useState<CommentItem[]>(() => {
+  const [comments, setCommentsInternal] = useState<CommentItem[]>(() => {
     const saved = localStorage.getItem("workspace_comments");
     if (saved) {
       try {
@@ -50,6 +51,19 @@ export default function App() {
     }
     return []; // Empty by default so it forces the landing/setup page
   });
+
+  const setComments = (newComments: CommentItem[] | ((prev: CommentItem[]) => CommentItem[])) => {
+    if (typeof newComments === "function") {
+      setCommentsInternal((prev) => {
+        const resolved = newComments(prev);
+        loadEmbeddingsIntoCache(resolved);
+        return resolved.map(({ embedding, ...rest }) => rest as CommentItem);
+      });
+    } else {
+      loadEmbeddingsIntoCache(newComments);
+      setCommentsInternal(newComments.map(({ embedding, ...rest }) => rest as CommentItem));
+    }
+  };
 
   const [isInitialized, setIsInitialized] = useState<boolean>(comments.length > 0);
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
@@ -240,12 +254,15 @@ export default function App() {
 
   // Similar items to the currently selected comment
   const similarToSelected = useMemo(() => {
-    if (!selectedComment || !selectedComment.embedding) return [];
+    if (!selectedComment) return [];
+    const selectedEmbedding = getCachedEmbedding(selectedComment.id) || selectedComment.embedding;
+    if (!selectedEmbedding || selectedEmbedding.length === 0) return [];
     
     return comments
-      .filter((c) => c.id !== selectedComment.id && !c.isArchived && c.embedding)
+      .filter((c) => c.id !== selectedComment.id && !c.isArchived)
       .map((c) => {
-        const similarity = calculateCosineSimilarity(selectedComment.embedding!, c.embedding!);
+        const cEmbedding = getCachedEmbedding(c.id) || c.embedding;
+        const similarity = cEmbedding ? calculateCosineSimilarity(selectedEmbedding, cEmbedding) : 0;
         return { comment: c, similarity };
       })
       .filter((res) => res.similarity >= 0.5) // Only display matches with 50%+ similarity
@@ -417,8 +434,12 @@ Format the response using beautiful, professional Markdown including:
 
   // 10. Session Operations: Export & Import JSON
   const handleExportSession = () => {
+    const fullComments = comments.map((c) => ({
+      ...c,
+      embedding: getCachedEmbedding(c.id) || c.embedding,
+    }));
     const sessionData = {
-      comments,
+      comments: fullComments,
       similarityThreshold: filters.similarityThreshold,
       executiveSummary,
     };

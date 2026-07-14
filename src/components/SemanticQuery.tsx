@@ -14,6 +14,7 @@ import {
 import { CommentItem, LlmSettings } from "../types";
 import { fetchLocalEmbeddings } from "../utils/localLlm";
 import { calculateCosineSimilarity } from "./DuplicateReview";
+import { getCachedEmbedding } from "../utils/embeddingsCache";
 
 interface SemanticQueryProps {
   comments: CommentItem[];
@@ -52,7 +53,7 @@ export function SemanticQuery({
 
   // Count active comments with embeddings
   const commentsWithEmbeddingsCount = useMemo(() => {
-    return activeComments.filter(c => c.embedding && c.embedding.length > 0).length;
+    return activeComments.filter(c => getCachedEmbedding(c.id) || (c.embedding && c.embedding.length > 0)).length;
   }, [activeComments]);
 
   // Calculate similarity score for each comment based on the query embedding
@@ -62,8 +63,9 @@ export function SemanticQuery({
     return activeComments
       .map(comment => {
         let similarity = 0;
-        if (comment.embedding && comment.embedding.length > 0) {
-          similarity = calculateCosineSimilarity(queryEmbedding, comment.embedding);
+        const emb = getCachedEmbedding(comment.id) || comment.embedding;
+        if (emb && emb.length > 0) {
+          similarity = calculateCosineSimilarity(queryEmbedding, emb);
         }
         return {
           ...comment,
