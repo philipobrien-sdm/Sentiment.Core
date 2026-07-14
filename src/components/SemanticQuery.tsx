@@ -22,6 +22,8 @@ interface SemanticQueryProps {
   selectedCommentId: string | null;
   onSelectComment: (id: string | null) => void;
   onNavigateToExplore: () => void;
+  onReloadProjectionWithQuery?: (text: string, embedding: number[]) => void;
+  onClearQueryNode?: () => void;
 }
 
 const SUGGESTED_QUERIES = [
@@ -37,7 +39,9 @@ export function SemanticQuery({
   llmSettings,
   selectedCommentId,
   onSelectComment,
-  onNavigateToExplore
+  onNavigateToExplore,
+  onReloadProjectionWithQuery,
+  onClearQueryNode,
 }: SemanticQueryProps) {
   const [queryText, setQueryText] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -55,6 +59,10 @@ export function SemanticQuery({
   const commentsWithEmbeddingsCount = useMemo(() => {
     return activeComments.filter(c => getCommentEmbedding(c, llmSettings.useCustomEmbedding)).length;
   }, [activeComments, llmSettings.useCustomEmbedding]);
+
+  const isQueryNodeActive = useMemo(() => {
+    return comments.some(c => c.id === "user_query_node");
+  }, [comments]);
 
   // Calculate similarity score for each comment based on the query embedding
   const scoredComments = useMemo(() => {
@@ -280,6 +288,58 @@ export function SemanticQuery({
           <div className="space-y-4">
             {queryEmbedding ? (
               <div className="space-y-4">
+                {/* OLDSCHOOL PERSISTENT VECTOR QUERY INJECTION CONTROLLER */}
+                <div className="bg-white border-2 border-dashed border-[#1A1A1A]/30 p-6 space-y-4 animate-in fade-in duration-300">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 bg-[#1A1A1A]/5 border border-[#1A1A1A]/10 text-[#1A1A1A] flex items-center justify-center shrink-0">
+                      <Sparkle className="w-5 h-5 text-[#4A6741]" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-[#1A1A1A] flex items-center gap-2">
+                        Oldschool Vector Projection Hub
+                      </h3>
+                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                        Inject this search query as a custom high-dimensional coordinate node inside the 2D cluster! By calculating the query's actual vector and adding it as a node, you can visually locate where it sits inside the Similarity Map relative to adjacent user feedback.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-dashed border-[#E5E3DF] flex flex-wrap gap-3.5 justify-between items-center">
+                    <div className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">
+                      Status:{" "}
+                      {isQueryNodeActive ? (
+                        <span className="text-green-600 font-bold">🟢 Active in cluster</span>
+                      ) : (
+                        <span className="text-amber-500 font-bold">🟡 Pending injection</span>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      {isQueryNodeActive && onClearQueryNode && (
+                        <button
+                          onClick={onClearQueryNode}
+                          className="px-3.5 py-2 bg-white hover:bg-gray-50 text-[#A13D2D] hover:text-[#A13D2D]/90 border border-gray-300 hover:border-gray-400 text-[10px] uppercase tracking-wider font-semibold transition-all cursor-pointer"
+                        >
+                          Clear Node from Map
+                        </button>
+                      )}
+
+                      {onReloadProjectionWithQuery && (
+                        <button
+                          onClick={() => {
+                            onReloadProjectionWithQuery(lastExecutedQuery, queryEmbedding);
+                            onNavigateToExplore();
+                          }}
+                          className="px-4 py-2 bg-[#1A1A1A] hover:bg-[#1A1A1A]/90 text-white text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <span>{isQueryNodeActive ? "Reload & Re-Cluster Map" : "Inject Node & Reload Map"}</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between text-xs text-gray-400 uppercase tracking-wider font-mono">
                   <span>Results for: <strong className="text-gray-700 font-bold">"{lastExecutedQuery}"</strong></span>
                   <span>{scoredComments.length} match{scoredComments.length === 1 ? "" : "es"} found</span>

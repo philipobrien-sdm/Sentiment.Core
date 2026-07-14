@@ -59,7 +59,7 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
 
   // 1. Group duplicates using a stable leader-based clustering algorithm
   const duplicateGroups = useMemo(() => {
-    const active = comments.filter((c) => !c.isArchived && getCommentEmbedding(c, useCustomEmbedding));
+    const active = comments.filter((c) => !c.isArchived && c.id !== "user_query_node" && getCommentEmbedding(c, useCustomEmbedding));
     const groups: DuplicateGroup[] = [];
     const assignedIds = new Set<string>();
 

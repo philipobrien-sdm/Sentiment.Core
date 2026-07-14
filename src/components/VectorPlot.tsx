@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
 import { CommentItem } from "../types";
 import { Maximize2, RotateCcw, Paintbrush, HelpCircle } from "lucide-react";
+import { getCommentEmbedding } from "../utils/embeddingsCache";
+import { calculateCosineSimilarity } from "./DuplicateReview";
 
 interface VectorPlotProps {
   comments: CommentItem[];
@@ -140,6 +142,9 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
 
   // Color selection helper
   const getColorForItem = (item: CommentItem) => {
+    if (item.id === "user_query_node") {
+      return "#ec4899"; // Vibrant electric pink for the search query node
+    }
     if (colorMode === "sentiment") {
       switch (item.sentiment) {
         case "positive":
@@ -255,6 +260,42 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
             ctx.stroke();
           }
         });
+
+        // Special case: If user_query_node is selected, draw lines to its top 5 nearest neighbors
+        if (selected.id === "user_query_node") {
+          const queryEmbedding = getCommentEmbedding(selected, true) || getCommentEmbedding(selected, false);
+          if (queryEmbedding && queryEmbedding.length > 0) {
+            // Find top 5 most similar comments
+            const neighbors = comments
+              .filter((c) => !c.isArchived && c.id !== "user_query_node")
+              .map((c) => {
+                const emb = getCommentEmbedding(c, true) || getCommentEmbedding(c, false);
+                const similarity = emb ? calculateCosineSimilarity(queryEmbedding, emb) : 0;
+                return { item: c, similarity };
+              })
+              .filter((res) => res.similarity >= 0.3)
+              .sort((a, b) => b.similarity - a.similarity)
+              .slice(0, 5);
+
+            // Draw beautiful dotted fuchsia connection lines to the neighbors
+            ctx.strokeStyle = "rgba(236, 72, 153, 0.4)";
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([3, 3]);
+            neighbors.forEach(({ item: neighborItem, similarity }) => {
+              const pNeighbor = toPixelCoords(neighborItem.x, neighborItem.y);
+              ctx.beginPath();
+              ctx.moveTo(pSel.x, pSel.y);
+              ctx.lineTo(pNeighbor.x, pNeighbor.y);
+              ctx.stroke();
+
+              // Draw similarity percentage labels
+              ctx.fillStyle = "#ec4899";
+              ctx.font = "bold 9px monospace";
+              ctx.fillText(`${Math.round(similarity * 100)}%`, pNeighbor.x + 8, pNeighbor.y - 4);
+            });
+            ctx.setLineDash([]);
+          }
+        }
       }
     }
 
@@ -270,6 +311,8 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
 
       // Base circle radius
       let radius = isDup ? 5 : 7;
+      const isQueryNode = item.id === "user_query_node";
+      if (isQueryNode) radius = 9;
       if (isSelected) radius += 2;
       if (isHovered) radius += 2;
 
@@ -280,7 +323,20 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
       ctx.fill();
 
       // Border style based on item qualities
-      if (isSelected) {
+      if (isQueryNode) {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw an outer pulsing concentric ring
+        const time = Date.now() / 250;
+        const pulseRadius = radius + 4 + Math.sin(time) * 2;
+        ctx.strokeStyle = "rgba(236, 72, 153, 0.6)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(px, py, pulseRadius, 0, 2 * Math.PI);
+        ctx.stroke();
+      } else if (isSelected) {
         ctx.strokeStyle = "#4f46e5"; // Indigo-600
         ctx.lineWidth = 2.5;
         ctx.stroke();
@@ -517,6 +573,11 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 border border-[#A13D2D] bg-[#F9F8F6]" /> Duplicate Flag
           </div>
+          {comments.some(c => c.id === "user_query_node") && (
+            <div className="flex items-center gap-1.5 font-bold text-[#ec4899]">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#ec4899] shadow-[0_0_4px_#ec4899]" /> 🔍 Search Query Node
+            </div>
+          )}
           <span className="text-gray-300">|</span>
           <span>🖱️ Drag to Pan</span>
           <span>⚙️ Scroll to Zoom</span>

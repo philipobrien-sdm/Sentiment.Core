@@ -236,6 +236,9 @@ export default function App() {
   // 3. Filter Comments
   const filteredComments = useMemo(() => {
     return comments.filter((item) => {
+      // Always include user query node to keep it visible on the map
+      if (item.id === "user_query_node") return true;
+
       // Skip archived
       if (item.isArchived) return false;
 
@@ -499,6 +502,78 @@ Format the response using beautiful, professional Markdown including:
     setComments(updated);
     setFilters((prev) => ({ ...prev, topics: [] })); // Clear selected topics since they are updated
     showToast("Successfully identified and clustered authentic topics from comments!", "success");
+  };
+
+  const handleReloadProjectionWithQuery = (queryText: string, queryEmbedding: number[]) => {
+    if (comments.length === 0) {
+      showToast("No active comments found to project.", "error");
+      return;
+    }
+
+    // Filter out previous user query node
+    const otherComments = comments.filter((c) => c.id !== "user_query_node");
+
+    // Compute coordinates using the standard projection logic
+    let qX = 0;
+    let qY = 0;
+    if (queryEmbedding && queryEmbedding.length >= 2) {
+      const half = Math.floor(queryEmbedding.length / 2);
+      const sumA = queryEmbedding.slice(0, half).reduce((sum, v) => sum + v, 0);
+      const sumB = queryEmbedding.slice(half).reduce((sum, v) => sum + v, 0);
+      qX = Math.sin(sumA * 4.5) * 0.95;
+      qY = Math.cos(sumB * 4.5) * 0.95;
+    }
+
+    const queryNode: CommentItem = {
+      id: "user_query_node",
+      text: queryText,
+      sentiment: "neutral",
+      topic: "🔍 Search Query",
+      embedding: queryEmbedding,
+      x: qX,
+      y: qY,
+      isArchived: false,
+      timestamp: new Date().toISOString().split('T')[0]
+    };
+
+    const allItemsToProject = [...otherComments, queryNode];
+
+    // Re-calculate coordinates for all items (re-project them all)
+    const updated = allItemsToProject.map((item, idx) => {
+      const vector = getCommentEmbedding(item, llmSettings.useCustomEmbedding) || item.embedding || [];
+      
+      let x = 0;
+      let y = 0;
+      
+      if (vector && vector.length >= 2) {
+        const half = Math.floor(vector.length / 2);
+        const sumA = vector.slice(0, half).reduce((sum, v) => sum + v, 0);
+        const sumB = vector.slice(half).reduce((sum, v) => sum + v, 0);
+        x = Math.sin(sumA * 4.5) * 0.95;
+        y = Math.cos(sumB * 4.5) * 0.95;
+      } else {
+        x = Math.sin(idx * 0.4) * 0.8;
+        y = Math.cos(idx * 0.4) * 0.8;
+      }
+
+      return {
+        ...item,
+        x,
+        y
+      };
+    });
+
+    setComments(updated);
+    setSelectedCommentId("user_query_node");
+    showToast("Re-computed coordinates & placed query node in the visual cluster!", "success");
+  };
+
+  const handleClearQueryNode = () => {
+    setComments((prev) => prev.filter((c) => c.id !== "user_query_node"));
+    if (selectedCommentId === "user_query_node") {
+      setSelectedCommentId(null);
+    }
+    showToast("Removed search query node from the visual cluster.", "info");
   };
 
   const apiMode = llmSettings.useCustomEmbedding ? "live" : "demo";
@@ -1033,6 +1108,8 @@ Format the response using beautiful, professional Markdown including:
                   selectedCommentId={selectedCommentId}
                   onSelectComment={setSelectedCommentId}
                   onNavigateToExplore={() => setActiveTab("explore")}
+                  onReloadProjectionWithQuery={handleReloadProjectionWithQuery}
+                  onClearQueryNode={handleClearQueryNode}
                 />
               )}
 
