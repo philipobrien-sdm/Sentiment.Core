@@ -454,3 +454,117 @@ ${neighborsList || "- No semantic neighbors are currently within close range on 
 3. **Engage with Local LLM**: Ensure a live local model endpoint is running in Settings to replace this diagnostic heuristic with real-time generative summary.`;
 }
 
+// Generates a beautifully formatted cluster critique and merge/archive recommendation (client-side heuristic fallback)
+export function generateLocalHeuristicClusterSynthesis(
+  primary: { id: string; text: string; sentiment: string; topic: string; csvRowIndex?: number },
+  duplicates: { comment: { id: string; text: string; sentiment: string; topic: string; csvRowIndex?: number }; similarity: number }[],
+  similarityThreshold: number
+): string {
+  const totalMembers = 1 + duplicates.length;
+  
+  const sentimentCounts: Record<string, number> = { positive: 0, neutral: 0, negative: 0 };
+  const safeSentiment = (s: string) => {
+    const ls = (s || "").toLowerCase();
+    if (ls === "positive" || ls === "neutral" || ls === "negative") return ls;
+    return "neutral";
+  };
+
+  sentimentCounts[safeSentiment(primary.sentiment)]++;
+  duplicates.forEach(d => {
+    sentimentCounts[safeSentiment(d.comment.sentiment)]++;
+  });
+
+  const duplicateList = duplicates.map((d) => {
+    return `- **[Similarity ${(d.similarity * 100).toFixed(1)}%]** (Row: ${d.comment.csvRowIndex || "?"}, Sentiment: *${d.comment.sentiment}*): "${d.comment.text}"`;
+  }).join("\n");
+
+  return `# LLM Cluster Audit & Critique
+*Analyzing a high-density duplicate cluster of ${totalMembers} customer reports at threshold ${(similarityThreshold * 100).toFixed(0)}%.*
+
+## 1. Primary Retained Record
+- **Selected Text**: "${primary.text}"
+- **Assigned Topic**: ${primary.topic || "General Feedback"}
+- **Sentiment Status**: ${(primary.sentiment || "NEUTRAL").toUpperCase()}
+- **Row Index**: ${primary.csvRowIndex || "N/A"}
+
+## 2. Redundancy & Variance Analysis
+The cluster contains **${duplicates.length} redundant copies** exceeding the match threshold. Overlapping reports show:
+${duplicateList || "- No redundant copies in this group."}
+
+### Overall Group Sentiment Profile
+- **Positive**: ${sentimentCounts.positive} items
+- **Neutral**: ${sentimentCounts.neutral} items
+- **Negative**: ${sentimentCounts.negative} items
+
+## 3. Critical Synthesis
+- **Core Intent**: These comments display high semantic coherence regarding **${primary.topic || "General Feedback"}**. Stakeholders are reporting the same central phenomenon, using slightly different syntax but identical core logic.
+- **Contextual Variance**: Some entries contain auxiliary metadata or metadata columns, but the primary user feedback payload remains duplicates. Retaining the single designated representative comment is highly safe and preserves the full signal.
+- **System Impact**: Consolidating these ${totalMembers} reports into a single primary record removes redundancy, making analysis 100% cleaner.
+
+## 4. Audit Recommendations
+1. **Perform Deduplication**: Choose "Archive Redundant Duplicates" to safely move matching rows to the archives while preserving the selected primary copy.
+2. **Standardize Theme**: Automatically tag incoming feedback matching this cluster under the topic **${primary.topic || "General Feedback"}**.
+3. **Connect Live LLM**: To replace this heuristic with live custom model analysis, configure your Ollama / LM Studio server in the Settings drawer.`;
+}
+
+// Generates a beautifully formatted summary and audit of refined nodes from the search/refinement panel
+export function generateLocalHeuristicRefinedNodesSynthesis(
+  nodes: { id: string; text: string; sentiment: string; topic: string; csvRowIndex?: number }[],
+  searchQuery: string
+): string {
+  const totalNodes = nodes.length;
+  
+  // Aggregate sentiment and topic breakdown
+  const sentimentCounts: Record<string, number> = { positive: 0, neutral: 0, negative: 0 };
+  const topicCounts: Record<string, number> = {};
+  
+  const safeSentiment = (s: string) => {
+    const ls = (s || "").toLowerCase();
+    if (ls === "positive" || ls === "neutral" || ls === "negative") return ls;
+    return "neutral";
+  };
+
+  nodes.forEach(n => {
+    sentimentCounts[safeSentiment(n.sentiment)]++;
+    topicCounts[n.topic || "Unassigned"] = (topicCounts[n.topic || "Unassigned"] || 0) + 1;
+  });
+
+  const topTopics = Object.entries(topicCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([topic, count]) => `- **${topic}**: ${count} record${count === 1 ? "" : "s"} (${((count / totalNodes) * 100).toFixed(0)}%)`)
+    .join("\n");
+
+  const sampleList = nodes.slice(0, 5).map((n) => {
+    return `- **ID: ${n.id}** (Topic: *${n.topic}*, Sentiment: *${n.sentiment}*): "${n.text}"`;
+  }).join("\n");
+
+  return `# LLM Refined Feedback Analysis
+*Critical strategic synthesis of ${totalNodes} active nodes matching search or active filter parameters ${searchQuery ? `for "${searchQuery}"` : ""}.*
+
+## 1. Filtered Dataset Composition
+- **Total Records in Scope**: ${totalNodes} items
+- **Sentiment Breakdown**:
+  - Positive: ${sentimentCounts.positive} (${((sentimentCounts.positive / totalNodes) * 100).toFixed(0)}%)
+  - Neutral: ${sentimentCounts.neutral} (${((sentimentCounts.neutral / totalNodes) * 100).toFixed(0)}%)
+  - Negative: ${sentimentCounts.negative} (${((sentimentCounts.negative / totalNodes) * 100).toFixed(0)}%)
+
+### Primary Topics of Concern
+${topTopics || "- No specific topics detected."}
+
+## 2. Selected Representative Excerpts
+Below are up to 5 representative user reports from this refined segment:
+${sampleList || "- No items are present in this segment."}
+
+## 3. Critical Qualitative Synthesis
+- **Overlapping Motifs**: Stakeholders in this segment exhibit recurring alignment regarding their operational issues or user expectations. The prevailing sentiment is heavily driven by **${sentimentCounts.negative > sentimentCounts.positive ? "friction points and technical/usability barriers" : "satisfaction points and positive brand sentiment"}**.
+- **Contextual Variance**: Although the comments are clustered under related categories, individual entries vary in intensity and details. Addressing the top topic (**${Object.keys(topicCounts)[0] || "General Feedback"}**) will yield the highest satisfaction returns for this demographic.
+- **Strategic Impact**: Systematically prioritizing these ${totalNodes} records will optimize the customer experience queue by directly resolving targeted friction.
+
+## 4. Operational Action Plan
+1. **Target Top Topic**: Initiate standard developer reviews for features associated with **${Object.keys(topicCounts)[0] || "General Feedback"}**.
+2. **Review Detractor Sentiment**: Isolate the negative comments in this search to locate any critical software errors.
+3. **Connect Live LLM**: To replace this heuristic with live custom model analysis, configure your Ollama / LM Studio server in the Settings drawer.`;
+}
+
+

@@ -89,16 +89,11 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
     return { x: mx, y: my };
   };
 
-  // Reset viewport zoom & pan to perfectly center all comments
-  const handleResetView = () => {
+  // Calculate the bounds of all active nodes on the map
+  const getNodesBounds = () => {
     if (comments.length === 0) {
-      setZoom(200);
-      setPanX(0);
-      setPanY(0);
-      return;
+      return { minX: -1, maxX: 1, minY: -1, maxY: 1 };
     }
-
-    // Find bounding box
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     comments.forEach((c) => {
@@ -108,14 +103,52 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
       minY = Math.min(minY, c.y);
       maxY = Math.max(maxY, c.y);
     });
+    
+    if (minX === Infinity || maxX === -Infinity) {
+      return { minX: -1, maxX: 1, minY: -1, maxY: 1 };
+    }
+    
+    // Add small padding to the node limits
+    const padding = 0.25;
+    return {
+      minX: minX - padding,
+      maxX: maxX + padding,
+      minY: minY - padding,
+      maxY: maxY + padding,
+    };
+  };
 
-    // Handle single element or tight bounds
-    if (minX === maxX) { minX -= 0.5; maxX += 0.5; }
-    if (minY === maxY) { minY -= 0.5; maxY += 0.5; }
+  // Keep the viewport center constrained inside the active node boundaries
+  const getConstrainedPan = (z: number, px: number, py: number) => {
+    const { minX, maxX, minY, maxY } = getNodesBounds();
+    
+    // centerX = -panX / zoom => -panX = centerX * zoom
+    // We want centerX between minX and maxX => -panX between minX * zoom and maxX * zoom
+    // => panX between -maxX * zoom and -minX * zoom
+    const minPanX = -maxX * z;
+    const maxPanX = -minX * z;
+    
+    // centerY = panY / zoom => panY = centerY * zoom
+    // We want centerY between minY and maxY => panY between minY * z and maxY * z
+    const minPanY = minY * z;
+    const maxPanY = maxY * z;
+    
+    const constrainedX = Math.max(minPanX, Math.min(maxPanX, px));
+    const constrainedY = Math.max(minPanY, Math.min(maxPanY, py));
+    
+    return { panX: constrainedX, panY: constrainedY };
+  };
 
-    const padding = 0.3;
-    minX -= padding; maxX += padding;
-    minY -= padding; maxY += padding;
+  // Reset viewport zoom & pan to perfectly center all comments
+  const handleResetView = () => {
+    if (comments.length === 0) {
+      setZoom(200);
+      setPanX(0);
+      setPanY(0);
+      return;
+    }
+
+    const { minX, maxX, minY, maxY } = getNodesBounds();
 
     const viewWidth = maxX - minX;
     const viewHeight = maxY - minY;
@@ -373,8 +406,13 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
       // Execute panning calculation
       const dx = mx - dragStart.current.x;
       const dy = my - dragStart.current.y;
-      setPanX(originalPan.current.x + dx);
-      setPanY(originalPan.current.y + dy);
+      
+      const targetPanX = originalPan.current.x + dx;
+      const targetPanY = originalPan.current.y + dy;
+      
+      const constrained = getConstrainedPan(zoom, targetPanX, targetPanY);
+      setPanX(constrained.panX);
+      setPanY(constrained.panY);
     } else {
       // Execute hit testing for hover
       let found: CommentItem | null = null;
@@ -448,9 +486,10 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
     const newPanX = mx - dimensions.width / 2 - mathUnderMouse.x * newZoom;
     const newPanY = dimensions.height / 2 - my + mathUnderMouse.y * newZoom;
 
+    const constrained = getConstrainedPan(newZoom, newPanX, newPanY);
     setZoom(newZoom);
-    setPanX(newPanX);
-    setPanY(newPanY);
+    setPanX(constrained.panX);
+    setPanY(constrained.panY);
   };
 
   return (

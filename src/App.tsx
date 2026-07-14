@@ -9,6 +9,7 @@ import { ExecutiveReport } from "./components/ExecutiveReport";
 import { ImportExport } from "./components/ImportExport";
 import { SetupLandingPage } from "./components/SetupLandingPage";
 import { SemanticQuery } from "./components/SemanticQuery";
+import { SynthesisModal, SavedSynthesis } from "./components/SynthesisModal";
 import { getCachedEmbedding, loadEmbeddingsIntoCache, setCachedEmbedding, getCommentEmbedding } from "./utils/embeddingsCache";
 import { 
   fetchLocalEmbeddings, 
@@ -16,7 +17,9 @@ import {
   generateLocalHeuristicSummary, 
   getDeterministicPseudoEmbedding,
   testLlmConnection,
-  generateLocalHeuristicNeighborhoodSynthesis
+  generateLocalHeuristicNeighborhoodSynthesis,
+  generateLocalHeuristicClusterSynthesis,
+  generateLocalHeuristicRefinedNodesSynthesis
 } from "./utils/localLlm";
 import { MarkdownViewer } from "./components/MarkdownViewer";
 import { 
@@ -75,6 +78,25 @@ export default function App() {
   const [expandedOriginalRow, setExpandedOriginalRow] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'explore' | 'duplicates' | 'report' | 'data' | 'query'>('explore');
   const [colorMode, setColorMode] = useState<'sentiment' | 'topic'>('sentiment');
+
+  // Critique Modal & History states
+  const [isSynthesisModalOpen, setIsSynthesisModalOpen] = useState<boolean>(false);
+  const [activeSynthesis, setActiveSynthesis] = useState<SavedSynthesis | null>(null);
+  const [isAnalyzingClusterId, setIsAnalyzingClusterId] = useState<string | null>(null);
+  const [synthesisHistory, setSynthesisHistory] = useState<SavedSynthesis[]>(() => {
+    const saved = localStorage.getItem("synthesis_history");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [];
+  });
+
+  // Sync synthesis history to localStorage
+  useEffect(() => {
+    localStorage.setItem("synthesis_history", JSON.stringify(synthesisHistory));
+  }, [synthesisHistory]);
   
   // Local LLM Settings
   const [llmSettings, setLlmSettings] = useState<LlmSettings>(() => {
@@ -441,10 +463,203 @@ Format your response using beautiful, structured Markdown. Make it professional 
         synthesisText = generateLocalHeuristicNeighborhoodSynthesis(selectedComment, similarToSelected);
       }
       setNeighborhoodSynthesis(synthesisText);
+
+      const newHistoryItem: SavedSynthesis = {
+        id: `map_${selectedComment.id}_${Date.now()}`,
+        title: `Neighborhood of ${selectedComment.id} (${1 + similarToSelected.length} items)`,
+        markdown: synthesisText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
+        source: "map"
+      };
+
+      setSynthesisHistory((prev) => [newHistoryItem, ...prev]);
+      setActiveSynthesis(newHistoryItem);
+      setIsSynthesisModalOpen(true);
     } catch (err: any) {
       showToast(err.message || "Neighborhood review generation failed.", "error");
     } finally {
       setIsAnalyzingNeighborhood(false);
+    }
+  };
+
+  // 5.6 API Event: Generate Cluster Synthesis & Critique for Deduplication tab
+  const handleGenerateClusterSynthesis = async (group: any, groupIndex: number) => {
+    setIsAnalyzingClusterId(group.id);
+    showToast(`Requesting LLM review for Cluster #${groupIndex + 1}...`, "info");
+
+    const totalMembers = 1 + group.duplicates.length;
+    const structuredPrompt = `You are a Senior Customer Quality Auditor & Product Strategy Analyst.
+Analyze the following cluster of highly similar / duplicate feedback comments.
+Provide a critical, objective review summarizing what stakeholders in this cluster are saying, their underlying intent, friction points, and specific actionable recommendations for deduplication and product action.
+
+Cluster Details:
+- Number of items in Cluster: ${totalMembers}
+- Similarity Threshold: ${filters.similarityThreshold * 100}%
+
+Primary Retained Comment:
+Text: "${group.originalComment.text}"
+Topic: "${group.originalComment.topic}"
+Sentiment: "${group.originalComment.sentiment}"
+
+Other Matching/Duplicate Comments in Cluster:
+${group.duplicates.map((dup: any, i: number) => `[Duplicate ${i+1}] (Similarity Match: ${(dup.similarity * 100).toFixed(0)}%) Text: "${dup.comment.text}" (Topic: "${dup.comment.topic}", Sentiment: "${dup.comment.sentiment}")`).join("\n")}
+
+Format your response using beautiful, structured Markdown. Make it professional and direct. Include:
+1. **Cluster Essence**: Objective critique of what the core complaint or suggestion is.
+2. **Variance Analysis**: Note if any duplicate comments contain extra unique context, columns, or slight differences in severity.
+3. **Product & Audit Recommendation**: 2-3 specific strategic guidelines on how to resolve the root user friction and whether these rows are safe to archive/merge.`;
+
+    try {
+      let synthesisText = "";
+      try {
+        synthesisText = await fetchLocalCompletion(structuredPrompt, llmSettings);
+        showToast(`Local LLM synthesis complete for Cluster #${groupIndex + 1}!`, "success");
+      } catch (innerErr) {
+        console.warn("Local model query failed, compiling offline client-side cluster synthesis.", innerErr);
+        showToast("Local LLM offline. Compiled client-side cluster critique.", "info");
+        synthesisText = generateLocalHeuristicClusterSynthesis(group.originalComment, group.duplicates, filters.similarityThreshold);
+      }
+
+      const newHistoryItem: SavedSynthesis = {
+        id: `cluster_${group.id}_${Date.now()}`,
+        title: `Cluster #${groupIndex + 1} Audit (${totalMembers} items)`,
+        markdown: synthesisText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
+        source: "cluster"
+      };
+
+      setSynthesisHistory((prev) => [newHistoryItem, ...prev]);
+      setActiveSynthesis(newHistoryItem);
+      setIsSynthesisModalOpen(true);
+    } catch (err: any) {
+      showToast(err.message || "Cluster critique generation failed.", "error");
+    } finally {
+      setIsAnalyzingClusterId(null);
+    }
+  };
+
+  // 5.7 API Event: Generate Refined Nodes Critique
+  const [isAnalyzingRefinedNodes, setIsAnalyzingRefinedNodes] = useState<boolean>(false);
+  const [showRefinedConfirmWarning, setShowRefinedConfirmWarning] = useState<boolean>(false);
+
+  const handleGenerateRefinedNodesSynthesis = async () => {
+    const realFiltered = filteredComments.filter(c => c.id !== "user_query_node");
+    if (realFiltered.length === 0) {
+      showToast("No active refined nodes in scope to analyze.", "error");
+      return;
+    }
+
+    setIsAnalyzingRefinedNodes(true);
+    showToast(`Requesting LLM review for ${realFiltered.length} refined nodes...`, "info");
+
+    const activeQueryText = filters.searchQuery.trim();
+    const structuredPrompt = `You are a Lead CX Strategist & Vector Data Auditor.
+Analyze the following custom subset of customer feedback records matching the user's current search/refinement filters.
+Provide a critical, objective review summarizing the collective voice of this segment, key complaints/friction points, and specific action recommendations.
+
+Segment Details:
+- Active Search Query: "${activeQueryText || "N/A (All Active Filters)"}"
+- Sentiment Filters: [${filters.sentiments.join(", ")}]
+- Topic Filters: [${filters.topics.join(", ")}]
+- Number of items in segment: ${realFiltered.length}
+
+Matching Customer Comments:
+${realFiltered.slice(0, 30).map((c, i) => `[Record ${i+1}] ID: ${c.id} (Topic: "${c.topic}", Sentiment: "${c.sentiment}"): "${c.text}"`).join("\n")}
+${realFiltered.length > 30 ? `...and ${realFiltered.length - 30} more matching comments.` : ""}
+
+Format your response using beautiful, structured Markdown. Make it professional and direct. Include:
+1. **Segment Theme & Tone**: High-level critical review of what stakeholders in this subset are collectively saying.
+2. **Sentiment & Topic Distribution**: Highlights of key subcategories or unexpected outliers.
+3. **Core Conflict/Friction**: The deepest root-cause issues affecting this group.
+4. **Action Recommendations**: 2-3 strategic guidelines for engineering or product teams.`;
+
+    try {
+      let synthesisText = "";
+      try {
+        synthesisText = await fetchLocalCompletion(structuredPrompt, llmSettings);
+        showToast("Local LLM refined nodes analysis complete!", "success");
+      } catch (innerErr) {
+        console.warn("Local model query failed, compiling offline client-side refined nodes critique.", innerErr);
+        showToast("Local LLM offline. Compiled client-side refined nodes critique.", "info");
+        synthesisText = generateLocalHeuristicRefinedNodesSynthesis(realFiltered, activeQueryText);
+      }
+
+      const newHistoryItem: SavedSynthesis = {
+        id: `refined_${Date.now()}`,
+        title: activeQueryText 
+          ? `Refined Search: "${activeQueryText}" (${realFiltered.length} items)`
+          : `Refined Nodes Subset (${realFiltered.length} items)`,
+        markdown: synthesisText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
+        source: "map"
+      };
+
+      setSynthesisHistory((prev) => [newHistoryItem, ...prev]);
+      setActiveSynthesis(newHistoryItem);
+      setIsSynthesisModalOpen(true);
+    } catch (err: any) {
+      showToast(err.message || "Refined nodes review generation failed.", "error");
+    } finally {
+      setIsAnalyzingRefinedNodes(false);
+    }
+  };
+
+  // 5.8 API Event: Generate Semantic Query Synthesis & Critique
+  const [isAnalyzingSemanticQuery, setIsAnalyzingSemanticQuery] = useState<boolean>(false);
+
+  const handleGenerateSemanticQuerySynthesis = async (queryText: string, results: CommentItem[]) => {
+    if (results.length === 0) {
+      showToast("No active search results to analyze.", "error");
+      return;
+    }
+
+    setIsAnalyzingSemanticQuery(true);
+    showToast(`Requesting LLM review for "${queryText}" (${results.length} results)...`, "info");
+
+    const structuredPrompt = `You are a Lead Customer Experience Strategist & Vector Auditor.
+Analyze the following customer feedback records retrieved via semantic search vector similarity.
+Provide a critical, objective review summarizing the collective user feedback, their central complaints/friction, and actionable developer recommendations.
+
+Search Parameters:
+- Semantic Query Text: "${queryText}"
+- Match Threshold: >= ${filters.similarityThreshold * 100}%
+- Total Matches: ${results.length}
+
+Top Matching Comments:
+${results.slice(0, 30).map((c, i) => `[Match ${i+1}] ID: ${c.id} (Similarity: ${c.similarityScore !== undefined ? (c.similarityScore * 100).toFixed(0) : "N/A"}%): "${c.text}"`).join("\n")}
+${results.length > 30 ? `...and ${results.length - 30} more matching comments.` : ""}
+
+Format your response using beautiful, structured Markdown. Make it professional and direct. Include:
+1. **Search Context Critique**: Critical overview of what users are reporting when querying for "${queryText}".
+2. **Common Intent & Alignment**: Overlapping expectations or friction trends in this semantic matching set.
+3. **Product Resolutions**: 2-3 strategic actionable developer recommendations to address this feedback area.`;
+
+    try {
+      let synthesisText = "";
+      try {
+        synthesisText = await fetchLocalCompletion(structuredPrompt, llmSettings);
+        showToast("Local LLM semantic query analysis complete!", "success");
+      } catch (innerErr) {
+        console.warn("Local model query failed, compiling offline client-side semantic search synthesis.", innerErr);
+        showToast("Local LLM offline. Compiled client-side query critique.", "info");
+        synthesisText = generateLocalHeuristicRefinedNodesSynthesis(results, queryText);
+      }
+
+      const newHistoryItem: SavedSynthesis = {
+        id: `semantic_${Date.now()}`,
+        title: `Semantic Search: "${queryText}" (${results.length} items)`,
+        markdown: synthesisText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
+        source: "map"
+      };
+
+      setSynthesisHistory((prev) => [newHistoryItem, ...prev]);
+      setActiveSynthesis(newHistoryItem);
+      setIsSynthesisModalOpen(true);
+    } catch (err: any) {
+      showToast(err.message || "Semantic query review generation failed.", "error");
+    } finally {
+      setIsAnalyzingSemanticQuery(false);
     }
   };
 
@@ -1047,6 +1262,59 @@ Format your response using beautiful, structured Markdown. Make it professional 
                           <PlusCircle className="w-4 h-4" />
                         </button>
                       </div>
+
+                      {/* Critique and Summary of Refined Set */}
+                      <div className="pt-3 border-t border-[#E5E3DF] space-y-2">
+                        {isAnalyzingRefinedNodes ? (
+                          <button
+                            disabled
+                            className="w-full py-2 bg-[#1A1A1A]/20 text-[#1A1A1A] font-mono text-[9px] uppercase tracking-widest font-bold flex items-center justify-center gap-1.5"
+                          >
+                            <Loader2 className="w-3.5 h-3.5 animate-spin animate-pulse text-[#1A1A1A]" />
+                            <span>Analyzing Nodes...</span>
+                          </button>
+                        ) : showRefinedConfirmWarning ? (
+                          <div className="bg-[#A13D2D]/5 p-2.5 border border-[#A13D2D]/20 text-center space-y-2 animate-in fade-in duration-200">
+                            <p className="text-[9px] text-[#A13D2D] font-mono uppercase font-bold leading-tight">
+                              ⚠️ Warning: Over 30 Nodes ({filteredComments.filter(c => c.id !== "user_query_node").length}) in query. This may exceed context limits or fail. Proceed?
+                            </p>
+                            <div className="flex gap-2 justify-center">
+                              <button
+                                onClick={() => setShowRefinedConfirmWarning(false)}
+                                className="px-3 py-1 bg-white border border-gray-300 hover:border-gray-400 text-gray-700 text-[9px] font-mono uppercase font-bold cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setShowRefinedConfirmWarning(false);
+                                  handleGenerateRefinedNodesSynthesis();
+                                }}
+                                className="px-3 py-1 bg-[#A13D2D] hover:bg-[#A13D2D]/90 text-white text-[9px] font-mono uppercase font-bold cursor-pointer"
+                              >
+                                Proceed
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              const nodeCount = filteredComments.filter(c => c.id !== "user_query_node").length;
+                              if (nodeCount === 0) {
+                                showToast("No active refined nodes to review.", "error");
+                              } else if (nodeCount > 30) {
+                                setShowRefinedConfirmWarning(true);
+                              } else {
+                                handleGenerateRefinedNodesSynthesis();
+                              }
+                            }}
+                            className="w-full py-2.5 bg-[#1A1A1A] hover:bg-[#1A1A1A]/90 text-white font-mono text-[9px] uppercase tracking-widest font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Critique Refined Set ({filteredComments.filter(c => c.id !== "user_query_node").length})</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* B. Active Comment details or fallback instruction */}
@@ -1279,6 +1547,8 @@ Format your response using beautiful, structured Markdown. Make it professional 
                   onArchiveDuplicate={handleArchiveComment}
                   onDismissDuplicate={handleDismissDuplicate}
                   useCustomEmbedding={llmSettings.useCustomEmbedding}
+                  onCriticallyReviewCluster={handleGenerateClusterSynthesis}
+                  isAnalyzingClusterId={isAnalyzingClusterId}
                 />
               )}
 
@@ -1292,6 +1562,8 @@ Format your response using beautiful, structured Markdown. Make it professional 
                   onNavigateToExplore={() => setActiveTab("explore")}
                   onReloadProjectionWithQuery={handleReloadProjectionWithQuery}
                   onClearQueryNode={handleClearQueryNode}
+                  onCriticallyReviewSearchResults={handleGenerateSemanticQuerySynthesis}
+                  isAnalyzingSearchResults={isAnalyzingSemanticQuery}
                 />
               )}
 
@@ -1370,6 +1642,25 @@ Format your response using beautiful, structured Markdown. Make it professional 
           </div>
         </div>
       )}
+
+      {/* Critique & Synthesis Modal with History */}
+      <SynthesisModal
+        isOpen={isSynthesisModalOpen}
+        onClose={() => setIsSynthesisModalOpen(false)}
+        activeSynthesis={activeSynthesis}
+        history={synthesisHistory}
+        onSelectHistoryItem={(item) => setActiveSynthesis(item)}
+        onDeleteHistoryItem={(id) => {
+          setSynthesisHistory((prev) => prev.filter((item) => item.id !== id));
+          if (activeSynthesis?.id === id) {
+            setActiveSynthesis(null);
+          }
+        }}
+        onClearHistory={() => {
+          setSynthesisHistory([]);
+          setActiveSynthesis(null);
+        }}
+      />
     </div>
   );
 }

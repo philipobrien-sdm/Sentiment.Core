@@ -5,7 +5,7 @@ import {
   Trash2, CheckCircle, AlertTriangle, ArrowRight, ShieldAlert, 
   FileSpreadsheet, Download, RefreshCw, FileText, ChevronRight, 
   Eye, Layers, HelpCircle, User, Activity, Clock, ShieldCheck, 
-  Calendar, Check, ArrowDownToLine, Info, Search, X
+  Calendar, Check, ArrowDownToLine, Info, Search, X, Sparkles, Loader2
 } from "lucide-react";
 import Papa from "papaparse";
 
@@ -16,6 +16,8 @@ interface DuplicateReviewProps {
   onArchiveDuplicate: (duplicateId: string) => void;
   onDismissDuplicate: (id: string) => void;
   useCustomEmbedding?: boolean;
+  onCriticallyReviewCluster?: (group: DuplicateGroup, groupIndex: number) => void;
+  isAnalyzingClusterId?: string | null;
 }
 
 // Cosine similarity helper for vectors
@@ -47,6 +49,8 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
   onArchiveDuplicate,
   onDismissDuplicate,
   useCustomEmbedding = false,
+  onCriticallyReviewCluster,
+  isAnalyzingClusterId = null,
 }) => {
   // Sub-tab selection: "groups" vs "action-plan"
   const [subTab, setSubTab] = useState<"groups" | "action-plan">("groups");
@@ -668,6 +672,23 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
                           Retains one verified primary item. Actioning will archive non-selected matching records.
                         </span>
                         <div className="flex items-center gap-2">
+                          {onCriticallyReviewCluster && (
+                            <button
+                              onClick={() => onCriticallyReviewCluster(group, gIdx)}
+                              disabled={isAnalyzingClusterId !== null}
+                              className="px-3.5 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-white bg-[#1A1A1A] hover:bg-[#1A1A1A]/90 disabled:opacity-50 rounded-none transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                              {isAnalyzingClusterId === group.id ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing...
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="w-3.5 h-3.5" /> Critically Review Cluster
+                                </>
+                              )}
+                            </button>
+                          )}
                           <button
                             onClick={() => handleBulkDismissGroup(group)}
                             className="px-3.5 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-[#1A1A1A] border border-[#1A1A1A] hover:bg-white rounded-none transition-colors bg-white cursor-pointer"

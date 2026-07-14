@@ -24,6 +24,8 @@ interface SemanticQueryProps {
   onNavigateToExplore: () => void;
   onReloadProjectionWithQuery?: (text: string, embedding: number[]) => void;
   onClearQueryNode?: () => void;
+  onCriticallyReviewSearchResults: (queryText: string, results: CommentItem[]) => void;
+  isAnalyzingSearchResults: boolean;
 }
 
 const SUGGESTED_QUERIES = [
@@ -42,6 +44,8 @@ export function SemanticQuery({
   onNavigateToExplore,
   onReloadProjectionWithQuery,
   onClearQueryNode,
+  onCriticallyReviewSearchResults,
+  isAnalyzingSearchResults,
 }: SemanticQueryProps) {
   const [queryText, setQueryText] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -49,6 +53,7 @@ export function SemanticQuery({
   const [queryEmbedding, setQueryEmbedding] = useState<number[] | null>(null);
   const [minSimilarity, setMinSimilarity] = useState(0.4); // default 40%
   const [lastExecutedQuery, setLastExecutedQuery] = useState("");
+  const [showConfirmWarning, setShowConfirmWarning] = useState(false);
 
   // Get active comments (exclude archived)
   const activeComments = useMemo(() => {
@@ -340,9 +345,61 @@ export function SemanticQuery({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-gray-400 uppercase tracking-wider font-mono">
-                  <span>Results for: <strong className="text-gray-700 font-bold">"{lastExecutedQuery}"</strong></span>
-                  <span>{scoredComments.length} match{scoredComments.length === 1 ? "" : "es"} found</span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-400 uppercase tracking-wider font-mono gap-4 bg-white border border-[#E5E3DF] p-4">
+                  <div className="space-y-1">
+                    <div>Results for: <strong className="text-gray-700 font-bold">"{lastExecutedQuery}"</strong></div>
+                    <div className="text-[10px]">{scoredComments.length} match{scoredComments.length === 1 ? "" : "es"} found</div>
+                  </div>
+
+                  <div>
+                    {isAnalyzingSearchResults ? (
+                      <button
+                        disabled
+                        className="px-4 py-2 bg-[#1A1A1A]/10 text-[#1A1A1A] text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5"
+                      >
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1A1A1A]" />
+                        <span>Analyzing Matches...</span>
+                      </button>
+                    ) : showConfirmWarning ? (
+                      <div className="bg-[#A13D2D]/5 p-3 border border-[#A13D2D]/20 text-center space-y-2 animate-in fade-in duration-200">
+                        <p className="text-[9px] text-[#A13D2D] font-mono uppercase font-bold leading-tight max-w-xs">
+                          ⚠️ Warning: Over 30 matches ({scoredComments.length}) to synthesize. Proceed?
+                        </p>
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => setShowConfirmWarning(false)}
+                            className="px-2.5 py-1 bg-white border border-gray-300 hover:border-gray-400 text-gray-700 text-[9px] font-mono uppercase font-bold cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowConfirmWarning(false);
+                              onCriticallyReviewSearchResults(lastExecutedQuery, scoredComments);
+                            }}
+                            className="px-2.5 py-1 bg-[#A13D2D] hover:bg-[#A13D2D]/90 text-white text-[9px] font-mono uppercase font-bold cursor-pointer"
+                          >
+                            Proceed
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (scoredComments.length === 0) return;
+                          if (scoredComments.length > 30) {
+                            setShowConfirmWarning(true);
+                          } else {
+                            onCriticallyReviewSearchResults(lastExecutedQuery, scoredComments);
+                          }
+                        }}
+                        className="px-4 py-2.5 bg-[#1A1A1A] hover:bg-[#1A1A1A]/90 text-white text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <Sparkle className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Critique Match Set ({scoredComments.length})</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {scoredComments.length > 0 ? (
