@@ -42,7 +42,8 @@ import {
   LogOut,
   Server,
   Loader2,
-  Eye
+  Eye,
+  History
 } from "lucide-react";
 
 export default function App() {
@@ -1113,6 +1114,23 @@ Format your response using beautiful, structured Markdown. Make it professional 
             </div>
           )}
 
+          {/* Synthesis History Button */}
+          {isInitialized && (
+            <button 
+              onClick={() => {
+                if (!activeSynthesis && synthesisHistory.length > 0) {
+                  setActiveSynthesis(synthesisHistory[0]);
+                }
+                setIsSynthesisModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+              title="Open LLM Critique History Hub"
+            >
+              <History className="w-3.5 h-3.5 text-amber-500" />
+              <span>History ({synthesisHistory.length})</span>
+            </button>
+          )}
+
           {/* Slide Drawer Button */}
           <button 
             onClick={() => setIsSettingsOpen(true)}
@@ -1179,32 +1197,50 @@ Format your response using beautiful, structured Markdown. Make it professional 
             </section>
 
             {/* View Mode Navigation Tabs */}
-            <section className="flex border-b border-[#E5E3DF] w-full overflow-x-auto shrink-0 scrollbar-none">
-              {[
-                { id: "explore", label: "Similarity Plot", icon: Map },
-                { id: "duplicates", label: "Deduplication Audit", icon: ShieldCheck },
-                { id: "query", label: "Semantic Query", icon: Sparkle },
-                { id: "report", label: "Executive Synthesis", icon: Layers },
-                { id: "data", label: "Manage Datasets", icon: Database },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex items-center justify-center gap-2 px-6 py-3.5 text-[11px] uppercase tracking-[0.15em] font-semibold border-b-2 -mb-[2px] transition-all shrink-0 ${
-                      isActive
-                        ? "border-[#1A1A1A] text-[#1A1A1A]"
-                        : "border-transparent text-gray-400 hover:text-[#1A1A1A]"
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
-            </section>
+            <div className="flex flex-col sm:flex-row sm:items-stretch justify-between border-b border-[#E5E3DF] gap-2 w-full">
+              <section className="flex overflow-x-auto shrink-0 scrollbar-none">
+                {[
+                  { id: "explore", label: "Similarity Plot", icon: Map },
+                  { id: "duplicates", label: "Deduplication Audit", icon: ShieldCheck },
+                  { id: "query", label: "Semantic Query", icon: Sparkle },
+                  { id: "report", label: "Executive Synthesis", icon: Layers },
+                  { id: "data", label: "Manage Datasets", icon: Database },
+                ].map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)}
+                      className={`flex items-center justify-center gap-2 px-6 py-3.5 text-[11px] uppercase tracking-[0.15em] font-semibold border-b-2 -mb-[2px] transition-all shrink-0 ${
+                        isActive
+                          ? "border-[#1A1A1A] text-[#1A1A1A]"
+                          : "border-transparent text-gray-400 hover:text-[#1A1A1A]"
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </section>
+
+              <div className="flex items-center px-4 sm:px-0 py-2 sm:py-0 mb-1 sm:mb-0">
+                <button 
+                  onClick={() => {
+                    if (!activeSynthesis && synthesisHistory.length > 0) {
+                      setActiveSynthesis(synthesisHistory[0]);
+                    }
+                    setIsSynthesisModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+                  title="View Saved Critical Summaries & Audits"
+                >
+                  <History className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Synthesis Hub ({synthesisHistory.length})</span>
+                </button>
+              </div>
+            </div>
 
             {/* Dynamic Display Panels */}
             <section className="transition-all duration-300">

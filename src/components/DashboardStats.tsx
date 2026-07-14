@@ -21,9 +21,25 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
 }) => {
   // Compute aggregations (excluding archived comments)
   const activeComments = comments.filter((c) => !c.isArchived);
-  const totalCount = activeComments.length;
 
-  const sentimentCounts = activeComments.reduce(
+  // Apply all active filters to get the currently visible subset of comments for general stats and sentiment breakdown
+  const visibleComments = activeComments.filter((item) => {
+    if (filters.showDuplicatesOnly && !item.isDuplicate) return false;
+    if (filters.sentiments.length > 0 && !filters.sentiments.includes(item.sentiment)) return false;
+    if (filters.topics.length > 0 && !filters.topics.includes(item.topic)) return false;
+    if (filters.searchQuery.trim().length > 0) {
+      const query = filters.searchQuery.toLowerCase();
+      const matchesText = item.text.toLowerCase().includes(query);
+      const matchesTopic = item.topic.toLowerCase().includes(query);
+      const matchesId = item.id.toLowerCase().includes(query);
+      if (!matchesText && !matchesTopic && !matchesId) return false;
+    }
+    return true;
+  });
+
+  const totalCount = visibleComments.length;
+
+  const sentimentCounts = visibleComments.reduce(
     (acc, c) => {
       acc[c.sentiment]++;
       return acc;
@@ -31,12 +47,42 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
     { positive: 0, neutral: 0, negative: 0 }
   );
 
-  const topicCounts = activeComments.reduce((acc, c) => {
+  // For topic list, filter by everything EXCEPT the topic filter itself to keep multi-select options visible
+  const commentsForTopicStats = activeComments.filter((item) => {
+    if (filters.showDuplicatesOnly && !item.isDuplicate) return false;
+    if (filters.sentiments.length > 0 && !filters.sentiments.includes(item.sentiment)) return false;
+    if (filters.searchQuery.trim().length > 0) {
+      const query = filters.searchQuery.toLowerCase();
+      const matchesText = item.text.toLowerCase().includes(query);
+      const matchesTopic = item.topic.toLowerCase().includes(query);
+      const matchesId = item.id.toLowerCase().includes(query);
+      if (!matchesText && !matchesTopic && !matchesId) return false;
+    }
+    return true;
+  });
+
+  const topicCounts = commentsForTopicStats.reduce((acc, c) => {
     acc[c.topic] = (acc[c.topic] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  const duplicateCount = activeComments.filter((c) => c.isDuplicate).length;
+  const topicStatsTotal = commentsForTopicStats.length;
+
+  // For duplicate summary, filter by everything EXCEPT the duplicate filter itself to show potential duplicates in active subset
+  const commentsForDuplicateStats = activeComments.filter((item) => {
+    if (filters.sentiments.length > 0 && !filters.sentiments.includes(item.sentiment)) return false;
+    if (filters.topics.length > 0 && !filters.topics.includes(item.topic)) return false;
+    if (filters.searchQuery.trim().length > 0) {
+      const query = filters.searchQuery.toLowerCase();
+      const matchesText = item.text.toLowerCase().includes(query);
+      const matchesTopic = item.topic.toLowerCase().includes(query);
+      const matchesId = item.id.toLowerCase().includes(query);
+      if (!matchesText && !matchesTopic && !matchesId) return false;
+    }
+    return true;
+  });
+
+  const duplicateCount = commentsForDuplicateStats.filter((c) => c.isDuplicate).length;
 
   // Sentiment distribution calculations
   const posPct = totalCount ? Math.round((sentimentCounts.positive / totalCount) * 100) : 0;
@@ -197,7 +243,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
             Object.entries(topicCounts).map(([topic, count]) => {
               const countNum = count as number;
               const isFiltered = filters.topics.includes(topic);
-              const percentage = totalCount ? Math.round((countNum / totalCount) * 100) : 0;
+              const percentage = topicStatsTotal ? Math.round((countNum / topicStatsTotal) * 100) : 0;
               return (
                 <button
                   key={topic}
