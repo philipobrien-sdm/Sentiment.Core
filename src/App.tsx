@@ -9,7 +9,7 @@ import { ExecutiveReport } from "./components/ExecutiveReport";
 import { ImportExport } from "./components/ImportExport";
 import { SetupLandingPage } from "./components/SetupLandingPage";
 import { SemanticQuery } from "./components/SemanticQuery";
-import { getCachedEmbedding, loadEmbeddingsIntoCache } from "./utils/embeddingsCache";
+import { getCachedEmbedding, loadEmbeddingsIntoCache, setCachedEmbedding, getCommentEmbedding } from "./utils/embeddingsCache";
 import { 
   fetchLocalEmbeddings, 
   fetchLocalCompletion, 
@@ -192,6 +192,21 @@ export default function App() {
     setIsInitialized(comments.length > 0);
   }, [comments]);
 
+  // Load/Generate embeddings for comments in cache if they don't exist
+  useEffect(() => {
+    if (comments.length > 0) {
+      for (const c of comments) {
+        if (!getCachedEmbedding(c.id)) {
+          if (c.embedding && c.embedding.length > 0) {
+            setCachedEmbedding(c.id, c.embedding);
+          } else if (!llmSettings.useCustomEmbedding) {
+            setCachedEmbedding(c.id, getDeterministicPseudoEmbedding(c.text));
+          }
+        }
+      }
+    }
+  }, [comments, llmSettings.useCustomEmbedding]);
+
   useEffect(() => {
     localStorage.setItem("llm_settings", JSON.stringify(llmSettings));
   }, [llmSettings]);
@@ -255,20 +270,20 @@ export default function App() {
   // Similar items to the currently selected comment
   const similarToSelected = useMemo(() => {
     if (!selectedComment) return [];
-    const selectedEmbedding = getCachedEmbedding(selectedComment.id) || selectedComment.embedding;
+    const selectedEmbedding = getCommentEmbedding(selectedComment, llmSettings.useCustomEmbedding);
     if (!selectedEmbedding || selectedEmbedding.length === 0) return [];
     
     return comments
       .filter((c) => c.id !== selectedComment.id && !c.isArchived)
       .map((c) => {
-        const cEmbedding = getCachedEmbedding(c.id) || c.embedding;
+        const cEmbedding = getCommentEmbedding(c, llmSettings.useCustomEmbedding);
         const similarity = cEmbedding ? calculateCosineSimilarity(selectedEmbedding, cEmbedding) : 0;
         return { comment: c, similarity };
       })
       .filter((res) => res.similarity >= 0.5) // Only display matches with 50%+ similarity
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 5); // top 5 matches
-  }, [comments, selectedComment]);
+  }, [comments, selectedComment, llmSettings.useCustomEmbedding]);
 
   // 4. API Event: Indexing raw CSV comments
   const handleStartIndexing = async (
@@ -436,7 +451,7 @@ Format the response using beautiful, professional Markdown including:
   const handleExportSession = () => {
     const fullComments = comments.map((c) => ({
       ...c,
-      embedding: getCachedEmbedding(c.id) || c.embedding,
+      embedding: getCommentEmbedding(c, llmSettings.useCustomEmbedding) || c.embedding,
     }));
     const sessionData = {
       comments: fullComments,
@@ -1006,6 +1021,7 @@ Format the response using beautiful, professional Markdown including:
                   onChangeThreshold={(val) => setFilters({ ...filters, similarityThreshold: val })}
                   onArchiveDuplicate={handleArchiveComment}
                   onDismissDuplicate={handleDismissDuplicate}
+                  useCustomEmbedding={llmSettings.useCustomEmbedding}
                 />
               )}
 

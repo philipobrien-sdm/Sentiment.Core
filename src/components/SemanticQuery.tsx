@@ -14,7 +14,7 @@ import {
 import { CommentItem, LlmSettings } from "../types";
 import { fetchLocalEmbeddings } from "../utils/localLlm";
 import { calculateCosineSimilarity } from "./DuplicateReview";
-import { getCachedEmbedding } from "../utils/embeddingsCache";
+import { getCommentEmbedding } from "../utils/embeddingsCache";
 
 interface SemanticQueryProps {
   comments: CommentItem[];
@@ -53,8 +53,8 @@ export function SemanticQuery({
 
   // Count active comments with embeddings
   const commentsWithEmbeddingsCount = useMemo(() => {
-    return activeComments.filter(c => getCachedEmbedding(c.id) || (c.embedding && c.embedding.length > 0)).length;
-  }, [activeComments]);
+    return activeComments.filter(c => getCommentEmbedding(c, llmSettings.useCustomEmbedding)).length;
+  }, [activeComments, llmSettings.useCustomEmbedding]);
 
   // Calculate similarity score for each comment based on the query embedding
   const scoredComments = useMemo(() => {
@@ -63,7 +63,7 @@ export function SemanticQuery({
     return activeComments
       .map(comment => {
         let similarity = 0;
-        const emb = getCachedEmbedding(comment.id) || comment.embedding;
+        const emb = getCommentEmbedding(comment, llmSettings.useCustomEmbedding);
         if (emb && emb.length > 0) {
           similarity = calculateCosineSimilarity(queryEmbedding, emb);
         }
@@ -74,7 +74,7 @@ export function SemanticQuery({
       })
       .filter(item => item.similarityScore >= minSimilarity)
       .sort((a, b) => b.similarityScore - a.similarityScore);
-  }, [activeComments, queryEmbedding, minSimilarity]);
+  }, [activeComments, queryEmbedding, minSimilarity, llmSettings.useCustomEmbedding]);
 
   // Perform the semantic query
   const handleSearch = async (textToSearch: string) => {

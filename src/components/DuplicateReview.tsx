@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { CommentItem, DuplicateGroup } from "../types";
-import { getCachedEmbedding } from "../utils/embeddingsCache";
+import { getCommentEmbedding } from "../utils/embeddingsCache";
 import { 
   Trash2, CheckCircle, AlertTriangle, ArrowRight, ShieldAlert, 
   FileSpreadsheet, Download, RefreshCw, FileText, ChevronRight, 
@@ -15,6 +15,7 @@ interface DuplicateReviewProps {
   onChangeThreshold: (val: number) => void;
   onArchiveDuplicate: (duplicateId: string) => void;
   onDismissDuplicate: (id: string) => void;
+  useCustomEmbedding?: boolean;
 }
 
 // Cosine similarity helper for vectors
@@ -45,6 +46,7 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
   onChangeThreshold,
   onArchiveDuplicate,
   onDismissDuplicate,
+  useCustomEmbedding = false,
 }) => {
   // Sub-tab selection: "groups" vs "action-plan"
   const [subTab, setSubTab] = useState<"groups" | "action-plan">("groups");
@@ -57,7 +59,7 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
 
   // 1. Group duplicates using a stable leader-based clustering algorithm
   const duplicateGroups = useMemo(() => {
-    const active = comments.filter((c) => !c.isArchived && (getCachedEmbedding(c.id) || c.embedding));
+    const active = comments.filter((c) => !c.isArchived && getCommentEmbedding(c, useCustomEmbedding));
     const groups: DuplicateGroup[] = [];
     const assignedIds = new Set<string>();
 
@@ -71,13 +73,13 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
       if (assignedIds.has(itemA.id)) continue;
 
       const groupDuplicates: { comment: CommentItem; similarity: number }[] = [];
-      const embA = getCachedEmbedding(itemA.id) || itemA.embedding;
+      const embA = getCommentEmbedding(itemA, useCustomEmbedding);
 
       for (let j = i + 1; j < limit; j++) {
         const itemB = active[j];
         if (assignedIds.has(itemB.id)) continue;
 
-        const embB = getCachedEmbedding(itemB.id) || itemB.embedding;
+        const embB = getCommentEmbedding(itemB, useCustomEmbedding);
 
         if (embA && embB) {
           const similarity = calculateCosineSimilarity(embA, embB);
@@ -103,7 +105,7 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
     }
 
     return groups;
-  }, [comments, similarityThreshold]);
+  }, [comments, similarityThreshold, useCustomEmbedding]);
 
   // 2. Adjust groups based on manually selected primary overrides
   const processedGroups = useMemo(() => {
@@ -397,7 +399,7 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
       </div>
 
       {/* Performance safety warning for massive datasets */}
-      {comments.filter(c => !c.isArchived && (getCachedEmbedding(c.id) || c.embedding)).length > 1500 && (
+      {comments.filter(c => !c.isArchived && getCommentEmbedding(c, useCustomEmbedding)).length > 1500 && (
         <div className="bg-[#A13D2D]/5 border border-[#A13D2D]/20 p-4 text-xs text-[#A13D2D] flex items-start gap-2.5">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-[#A13D2D]" />
           <div className="space-y-1">
