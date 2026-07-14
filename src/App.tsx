@@ -15,8 +15,10 @@ import {
   fetchLocalCompletion, 
   generateLocalHeuristicSummary, 
   getDeterministicPseudoEmbedding,
-  testLlmConnection
+  testLlmConnection,
+  generateLocalHeuristicNeighborhoodSynthesis
 } from "./utils/localLlm";
+import { MarkdownViewer } from "./components/MarkdownViewer";
 import { 
   Sparkles, 
   Map, 
@@ -36,7 +38,8 @@ import {
   X,
   LogOut,
   Server,
-  Loader2
+  Loader2,
+  Eye
 } from "lucide-react";
 
 export default function App() {
@@ -67,6 +70,9 @@ export default function App() {
 
   const [isInitialized, setIsInitialized] = useState<boolean>(comments.length > 0);
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [isAnalyzingNeighborhood, setIsAnalyzingNeighborhood] = useState<boolean>(false);
+  const [neighborhoodSynthesis, setNeighborhoodSynthesis] = useState<string | null>(null);
+  const [expandedOriginalRow, setExpandedOriginalRow] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'explore' | 'duplicates' | 'report' | 'data' | 'query'>('explore');
   const [colorMode, setColorMode] = useState<'sentiment' | 'topic'>('sentiment');
   
@@ -176,6 +182,12 @@ export default function App() {
     showDuplicatesOnly: false,
     similarityThreshold: 0.85,
   });
+
+  // Reset selected comment neighborhood critique and column details state on selection change
+  useEffect(() => {
+    setNeighborhoodSynthesis(null);
+    setExpandedOriginalRow(false);
+  }, [selectedCommentId]);
 
   // Sync state helpers
   useEffect(() => {
@@ -391,6 +403,48 @@ Format the response using beautiful, professional Markdown including:
     } catch (err: any) {
       setIsSummarizing(false);
       showToast(err.message || "Report generation failed.", "error");
+    }
+  };
+
+  // 5.5 API Event: Generate Neighborhood Synthesis & Critique
+  const handleGenerateNeighborhoodSynthesis = async () => {
+    if (!selectedComment) return;
+    setIsAnalyzingNeighborhood(true);
+    showToast(`Requesting LLM review for comment and adjacent neighborhood...`, "info");
+    
+    const structuredPrompt = `You are a Senior Strategic Customer Experience & Data Analyst.
+Analyze the following primary customer comment along with its closest semantic neighbors.
+Provide a critical, objective review summarizing what stakeholders in this subset are saying, their underlying intent/problems, and any specific action recommendations.
+
+Selected Primary Comment (ID: ${selectedComment.id}):
+Text: "${selectedComment.text}"
+Topic: "${selectedComment.topic}"
+Sentiment: "${selectedComment.sentiment}"
+
+Nearest Semantic Neighbors:
+${similarToSelected.map((res, i) => `[Neighbor ${i+1}] (Similarity Match: ${(res.similarity * 100).toFixed(0)}%) Text: "${res.comment.text}" (Topic: "${res.comment.topic}", Sentiment: "${res.comment.sentiment}")`).join("\n")}
+
+Format your response using beautiful, structured Markdown. Make it professional and direct, highlighting overlapping needs and key friction points. Include:
+1. **Case-Specific Critique**: Breakdown of the primary report.
+2. **Adjacent Neighborhood Sentiment**: Overlapping themes or contradictions in the subset.
+3. **Synthesis of Stakeholder Intent**: What they are collectively advocating/complaining about.
+4. **Concrete Next Steps**: 2-3 strategic developer/product recommendations.`;
+
+    try {
+      let synthesisText = "";
+      try {
+        synthesisText = await fetchLocalCompletion(structuredPrompt, llmSettings);
+        showToast("Local LLM neighborhood analysis complete!", "success");
+      } catch (innerErr) {
+        console.warn("Local model query failed, compiling offline client-side heuristic synthesis.", innerErr);
+        showToast("Local LLM offline. Compiled client-side subset critique.", "info");
+        synthesisText = generateLocalHeuristicNeighborhoodSynthesis(selectedComment, similarToSelected);
+      }
+      setNeighborhoodSynthesis(synthesisText);
+    } catch (err: any) {
+      showToast(err.message || "Neighborhood review generation failed.", "error");
+    } finally {
+      setIsAnalyzingNeighborhood(false);
     }
   };
 
@@ -1078,6 +1132,30 @@ Format the response using beautiful, professional Markdown including:
                             </p>
                           </div>
 
+                          {/* Original row details expansion */}
+                          {selectedComment.originalRowData && (
+                            <div className="pt-1">
+                              <button
+                                onClick={() => setExpandedOriginalRow(!expandedOriginalRow)}
+                                className="text-[10px] text-[#4A6741] hover:underline flex items-center gap-1.5 font-bold uppercase tracking-wider cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                {expandedOriginalRow ? "Hide Original Row Columns" : "Inspect Original Row Columns"}
+                              </button>
+                              {expandedOriginalRow && (
+                                <div className="bg-[#F9F8F6] border border-[#E5E3DF] p-3 text-[10px] font-mono text-gray-600 mt-2 space-y-1 max-h-48 overflow-y-auto rounded-none">
+                                  <p className="text-[9px] font-bold uppercase text-gray-400 mb-1 border-b border-gray-200 pb-0.5">Original File Columns</p>
+                                  {Object.entries(selectedComment.originalRowData).map(([k, v]) => (
+                                    <div key={k} className="flex flex-col md:flex-row md:justify-between gap-1 border-b border-gray-100 pb-1 last:border-0">
+                                      <span className="text-gray-400 font-bold break-all">{k}:</span>
+                                      <span className="text-[#1A1A1A] break-all">{v !== null && v !== undefined ? String(v) : "(empty)"}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {/* Meta modifier selectors */}
                           <div className="grid grid-cols-2 gap-4 text-xs">
                             <div>
@@ -1134,7 +1212,46 @@ Format the response using beautiful, professional Markdown including:
                               </div>
                             </div>
                           )}
+
+                          {/* LLM Neighborhood Review section */}
+                          <div className="pt-4 border-t border-[#E5E3DF] space-y-3">
+                            <span className="text-[10px] uppercase font-bold tracking-widest text-[#1A1A1A]/60 block">
+                              LLM Neighborhood Synthesis
+                            </span>
+                            
+                            {isAnalyzingNeighborhood ? (
+                              <div className="bg-[#F9F8F6] p-4 border border-[#E5E3DF] text-center flex flex-col items-center justify-center space-y-2 py-6 rounded-none">
+                                <Loader2 className="w-5 h-5 text-[#1A1A1A] animate-spin" />
+                                <p className="text-[10px] text-gray-500 font-medium font-mono uppercase tracking-wider">Analyzing neighborhood...</p>
+                              </div>
+                            ) : neighborhoodSynthesis ? (
+                              <div className="space-y-3">
+                                <div className="bg-[#F9F8F6] p-4 border border-[#E5E3DF] rounded-none max-h-60 overflow-y-auto text-xs leading-relaxed">
+                                  <MarkdownViewer markdown={neighborhoodSynthesis} />
+                                </div>
+                                <button
+                                  onClick={handleGenerateNeighborhoodSynthesis}
+                                  className="w-full py-2 bg-[#1A1A1A] hover:bg-[#1A1A1A]/90 text-white font-mono text-[9px] uppercase tracking-widest font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" /> Re-run Subset Synthesis
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <p className="text-[10px] text-gray-500 leading-normal">
+                                  Critically review this comment and its {similarToSelected.length} closest neighbors to summarize stakeholder opinion.
+                                </p>
+                                <button
+                                  onClick={handleGenerateNeighborhoodSynthesis}
+                                  className="w-full py-2.5 bg-[#1A1A1A] hover:bg-[#1A1A1A]/90 text-white font-mono text-[9px] uppercase tracking-widest font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" /> Review Subset with LLM
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
+
                       )
                     ) : (
                       <div className="bg-white p-8 border border-[#E5E3DF] text-center flex flex-col items-center justify-center min-h-[220px] rounded-none shadow-none">

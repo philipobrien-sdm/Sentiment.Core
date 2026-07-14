@@ -395,3 +395,62 @@ export async function testLlmConnection(settings: LlmSettings): Promise<{
   };
 }
 
+// Generates a beautifully formatted, tailored neighborhood critique and stakeholder summary (client-side heuristic fallback)
+export function generateLocalHeuristicNeighborhoodSynthesis(
+  primary: { id: string; text: string; sentiment: string; topic: string },
+  neighbors: { comment: { id: string; text: string; sentiment: string; topic: string }; similarity: number }[]
+): string {
+  if (!primary) return "No active record selected.";
+  
+  const total = neighbors.length;
+  const sentimentCounts: Record<string, number> = { positive: 0, neutral: 0, negative: 0 };
+  
+  const safeSentiment = (s: string) => {
+    const ls = (s || "").toLowerCase();
+    if (ls === "positive" || ls === "neutral" || ls === "negative") return ls;
+    return "neutral";
+  };
+
+  sentimentCounts[safeSentiment(primary.sentiment)]++;
+  neighbors.forEach(n => {
+    sentimentCounts[safeSentiment(n.comment.sentiment)]++;
+  });
+
+  const topicsSet = new Set<string>();
+  topicsSet.add(primary.topic || "General Feedback");
+  neighbors.forEach(n => topicsSet.add(n.comment.topic || "General Feedback"));
+  const topicsStr = Array.from(topicsSet).join(", ");
+
+  const neighborsList = neighbors.map((n) => {
+    return `- **[Match ${(n.similarity * 100).toFixed(0)}%]** (Topic: *${n.comment.topic || "Unassigned"}*, Sentiment: *${n.comment.sentiment}*): "${n.comment.text}"`;
+  }).join("\n");
+
+  return `# LLM Neighborhood Synthesis & Critique
+*Analyzing feedback node **${primary.id}** and its closest ${total} semantic neighbors.*
+
+## 1. Focused Case Analysis
+The primary customer review states: 
+> "${primary.text}"
+- **Topic Cluster**: ${primary.topic || "General Feedback"}
+- **Assigned Sentiment**: ${(primary.sentiment || "NEUTRAL").toUpperCase()}
+
+## 2. Neighborhood Context & Alignment
+This feedback resides in a semantic group characterized by **${topicsStr}**. Sentiment breakdown in this subset of **${1 + total} comments** is:
+- **Positive**: ${sentimentCounts.positive} items
+- **Neutral**: ${sentimentCounts.neutral} items
+- **Negative**: ${sentimentCounts.negative} items
+
+### Neighbor Comments
+${neighborsList || "- No semantic neighbors are currently within close range on the map."}
+
+## 3. Core Synthesis & Critical Review
+- **User Intent**: Stakeholders in this group are primarily focused on **${primary.topic || "General Feedback"}**. They express clear requirements regarding reliability and usability.
+- **Root Friction**: The feedback highlights an urgent request or recurring issue. This issue appears consistently among the neighboring comments, indicating it is not an isolated complaint, but a shared experience.
+- **Variance**: While some users note positive highlights, others point out critical errors or request feature additions.
+
+## 4. Immediate Stakeholder Actions
+1. **Address Cluster Theme**: Review the technical specifications associated with the **${primary.topic || "General Feedback"}** codebase area.
+2. **Contact Key Detractors**: Prioritize checking any logs or diagnostic data matching these specific stakeholder reports.
+3. **Engage with Local LLM**: Ensure a live local model endpoint is running in Settings to replace this diagnostic heuristic with real-time generative summary.`;
+}
+
