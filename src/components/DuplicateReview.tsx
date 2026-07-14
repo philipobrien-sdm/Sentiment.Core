@@ -5,7 +5,7 @@ import {
   Trash2, CheckCircle, AlertTriangle, ArrowRight, ShieldAlert, 
   FileSpreadsheet, Download, RefreshCw, FileText, ChevronRight, 
   Eye, Layers, HelpCircle, User, Activity, Clock, ShieldCheck, 
-  Calendar, Check, ArrowDownToLine, Info
+  Calendar, Check, ArrowDownToLine, Info, Search, X
 } from "lucide-react";
 import Papa from "papaparse";
 
@@ -56,6 +56,9 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
   
   // Track which comment ID is expanded for a full CSV metadata inspection
   const [expandedCommentId, setExpandedCommentId] = useState<string | null>(null);
+
+  // Search keyword state to filter clusters
+  const [searchQuery, setSearchQuery] = useState("");
 
   // 1. Group duplicates using a stable leader-based clustering algorithm
   const duplicateGroups = useMemo(() => {
@@ -138,6 +141,30 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
       };
     });
   }, [duplicateGroups, manuallySelectedPrimary]);
+
+  // Filtered list of groups based on the search query text
+  const filteredProcessedGroups = useMemo(() => {
+    if (!searchQuery.trim()) return processedGroups;
+    const query = searchQuery.toLowerCase().trim();
+    return processedGroups.filter((group) => {
+      const matchOriginal = 
+        group.originalComment.text.toLowerCase().includes(query) ||
+        (group.originalComment.topic && group.originalComment.topic.toLowerCase().includes(query)) ||
+        (group.originalComment.sentiment && group.originalComment.sentiment.toLowerCase().includes(query)) ||
+        (group.originalComment.csvRowIndex && String(group.originalComment.csvRowIndex).includes(query)) ||
+        group.originalComment.id.toLowerCase().includes(query);
+        
+      const matchDuplicates = group.duplicates.some((dup) => 
+        dup.comment.text.toLowerCase().includes(query) ||
+        (dup.comment.topic && dup.comment.topic.toLowerCase().includes(query)) ||
+        (dup.comment.sentiment && dup.comment.sentiment.toLowerCase().includes(query)) ||
+        (dup.comment.csvRowIndex && String(dup.comment.csvRowIndex).includes(query)) ||
+        dup.comment.id.toLowerCase().includes(query)
+      );
+      
+      return matchOriginal || matchDuplicates;
+    });
+  }, [processedGroups, searchQuery]);
 
   // 3. Map comment IDs to their active deduplication roles
   const commentActionMap = useMemo(() => {
@@ -417,209 +444,264 @@ export const DuplicateReview: React.FC<DuplicateReviewProps> = ({
           
           {/* Main group list (3/4 layout) */}
           <div className="lg:col-span-3 space-y-4">
-            {processedGroups.length > 0 ? (
-              processedGroups.map((group, gIdx) => {
-                const totalMembersInGroup = 1 + group.duplicates.length;
-                return (
-                  <div
-                    key={group.id}
-                    className="bg-white border border-[#E5E3DF] rounded-none overflow-hidden divide-y divide-[#E5E3DF] hover:border-[#1A1A1A] transition-colors"
+            
+            {/* Search Input Filter for Clusters */}
+            <div className="bg-white p-5 border border-[#E5E3DF] space-y-3.5 rounded-none shadow-none">
+              <div className="flex items-center gap-2">
+                <Search className="w-4 h-4 text-gray-400" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#1A1A1A]">
+                  Filter Clusters by Keyword
+                </span>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Type a keyword to filter duplicate clusters (e.g., 'speed', 'payment', 'bug')..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-[#F9F8F6] border border-[#E5E3DF] pl-10 pr-10 py-2.5 text-xs focus:outline-none focus:border-[#1A1A1A] transition-colors rounded-none placeholder-gray-400 font-medium"
+                />
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+                  <Search className="w-4 h-4" />
+                </div>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A1A1A] transition-colors p-1 cursor-pointer"
                   >
-                    {/* Header bar */}
-                    <div className="bg-[#F9F8F6] px-5 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] bg-white border border-[#E5E3DF] text-[#1A1A1A] font-bold px-2.5 py-1 rounded-none font-mono tracking-wider">
-                          CLUSTER #{gIdx + 1}
-                        </span>
-                        <span className="text-[9px] text-gray-400 font-mono uppercase">
-                          ({totalMembersInGroup} comments in group)
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              {searchQuery && (
+                <div className="flex justify-between items-center text-[10px] font-mono text-gray-400 uppercase">
+                  <span>Filtered: <strong className="text-[#A13D2D] font-bold">"{searchQuery}"</strong></span>
+                  <span>{filteredProcessedGroups.length} of {processedGroups.length} cluster{processedGroups.length === 1 ? "" : "s"} shown</span>
+                </div>
+              )}
+            </div>
+
+            {processedGroups.length > 0 ? (
+              filteredProcessedGroups.length > 0 ? (
+                filteredProcessedGroups.map((group, gIdx) => {
+                  const totalMembersInGroup = 1 + group.duplicates.length;
+                  return (
+                    <div
+                      key={group.id}
+                      className="bg-white border border-[#E5E3DF] rounded-none overflow-hidden divide-y divide-[#E5E3DF] hover:border-[#1A1A1A] transition-colors"
+                    >
+                      {/* Header bar */}
+                      <div className="bg-[#F9F8F6] px-5 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] bg-white border border-[#E5E3DF] text-[#1A1A1A] font-bold px-2.5 py-1 rounded-none font-mono tracking-wider">
+                            CLUSTER #{gIdx + 1}
+                          </span>
+                          <span className="text-[9px] text-gray-400 font-mono uppercase">
+                            ({totalMembersInGroup} comments in group)
+                          </span>
+                        </div>
+                        <span className="text-[10px] bg-[#A13D2D]/10 border border-[#A13D2D]/20 text-[#A13D2D] px-2 py-0.5 rounded-none font-mono font-semibold">
+                          Max Sim: {(group.duplicates[0]?.similarity * 100).toFixed(1)}%
                         </span>
                       </div>
-                      <span className="text-[10px] bg-[#A13D2D]/10 border border-[#A13D2D]/20 text-[#A13D2D] px-2 py-0.5 rounded-none font-mono font-semibold">
-                        Max Sim: {(group.duplicates[0]?.similarity * 100).toFixed(1)}%
-                      </span>
-                    </div>
 
-                    {/* Interactive Selector with comments listed */}
-                    <div className="p-5 space-y-4">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                        CHOOSE REPRESENTATIVE COMMENT TO RETAIN (Other rows will be flagged for removal/archived):
-                      </p>
+                      {/* Interactive Selector with comments listed */}
+                      <div className="p-5 space-y-4">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                          CHOOSE REPRESENTATIVE COMMENT TO RETAIN (Other rows will be flagged for removal/archived):
+                        </p>
 
-                      <div className="space-y-3">
-                        {/* 1. Primary Option */}
-                        <div 
-                          className={`p-4 border transition-colors cursor-pointer flex items-start gap-4 ${
-                            manuallySelectedPrimary[group.id] === group.originalComment.id || !manuallySelectedPrimary[group.id]
-                              ? "bg-[#4A6741]/5 border-[#4A6741]/35"
-                              : "bg-white border-[#E5E3DF] hover:bg-gray-50"
-                          }`}
-                          onClick={() => setManuallySelectedPrimary({ ...manuallySelectedPrimary, [group.id]: group.originalComment.id })}
-                        >
-                          <div className="pt-0.5">
-                            <input
-                              type="radio"
-                              name={`primary-selector-${group.id}`}
-                              checked={manuallySelectedPrimary[group.id] === group.originalComment.id || !manuallySelectedPrimary[group.id]}
-                              onChange={() => {}}
-                              className="accent-[#4A6741] cursor-pointer"
-                            />
-                          </div>
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A6741] flex items-center gap-1.5">
-                                <Check className="w-3.5 h-3.5" /> Retained Record (Primary Copy)
-                              </span>
-                              <span className="text-[10px] font-mono text-gray-400 font-medium bg-gray-100 border border-gray-200/50 px-1.5 py-0.5">
-                                {getRowDescriptor(group.originalComment)}
-                              </span>
+                        <div className="space-y-3">
+                          {/* 1. Primary Option */}
+                          <div 
+                            className={`p-4 border transition-colors cursor-pointer flex items-start gap-4 ${
+                              manuallySelectedPrimary[group.id] === group.originalComment.id || !manuallySelectedPrimary[group.id]
+                                ? "bg-[#4A6741]/5 border-[#4A6741]/35"
+                                : "bg-white border-[#E5E3DF] hover:bg-gray-50"
+                            }`}
+                            onClick={() => setManuallySelectedPrimary({ ...manuallySelectedPrimary, [group.id]: group.originalComment.id })}
+                          >
+                            <div className="pt-0.5">
+                              <input
+                                type="radio"
+                                name={`primary-selector-${group.id}`}
+                                checked={manuallySelectedPrimary[group.id] === group.originalComment.id || !manuallySelectedPrimary[group.id]}
+                                onChange={() => {}}
+                                className="accent-[#4A6741] cursor-pointer"
+                              />
                             </div>
-                            <p className="text-xs text-[#1A1A1A] font-serif italic leading-relaxed">
-                              "{group.originalComment.text}"
-                            </p>
-                            
-                            {/* Metadata Pill Indicators */}
-                            <div className="flex flex-wrap gap-2 pt-1.5">
-                              <span className="text-[9px] font-semibold bg-[#F9F8F6] border border-[#E5E3DF] text-gray-500 px-2 py-0.5">
-                                Topic: {group.originalComment.topic}
-                              </span>
-                              <span className="text-[9px] font-semibold bg-[#F9F8F6] border border-[#E5E3DF] text-gray-500 px-2 py-0.5 uppercase">
-                                Sentiment: {group.originalComment.sentiment}
-                              </span>
-                              {group.originalComment.originalRowData && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setExpandedCommentId(expandedCommentId === group.originalComment.id ? null : group.originalComment.id);
-                                  }}
-                                  className="text-[9px] text-[#4A6741] hover:underline flex items-center gap-1 font-semibold ml-auto"
-                                >
-                                  <Eye className="w-3 h-3" /> Inspect original row cols
-                                </button>
-                              )}
-                            </div>
-
-                            {/* CSV Inspector panel */}
-                            {expandedCommentId === group.originalComment.id && group.originalComment.originalRowData && (
-                              <div className="bg-[#F9F8F6] border border-[#E5E3DF] p-3 text-[11px] font-mono text-gray-600 mt-2 space-y-1">
-                                <p className="text-[9px] font-bold uppercase text-gray-400 mb-1 border-b border-gray-200 pb-0.5">Original File Columns</p>
-                                {Object.entries(group.originalComment.originalRowData).map(([k, v]) => (
-                                  <div key={k} className="flex justify-between gap-4">
-                                    <span className="text-gray-400 font-bold">{k}:</span>
-                                    <span className="text-right text-gray-800 break-all">{v || "(empty)"}</span>
-                                  </div>
-                                ))}
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A6741] flex items-center gap-1.5">
+                                  <Check className="w-3.5 h-3.5" /> Retained Record (Primary Copy)
+                                </span>
+                                <span className="text-[10px] font-mono text-gray-400 font-medium bg-gray-100 border border-gray-200/50 px-1.5 py-0.5">
+                                  {getRowDescriptor(group.originalComment)}
+                                </span>
                               </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* 2. Duplicates options */}
-                        {group.duplicates.map((dup) => {
-                          const isSelectedPrimary = manuallySelectedPrimary[group.id] === dup.comment.id;
-                          return (
-                            <div 
-                              key={dup.comment.id}
-                              className={`p-4 border transition-colors cursor-pointer flex items-start gap-4 ${
-                                isSelectedPrimary
-                                  ? "bg-[#4A6741]/5 border-[#4A6741]/35"
-                                  : "bg-white border-[#E5E3DF] hover:bg-gray-50"
-                              }`}
-                              onClick={() => setManuallySelectedPrimary({ ...manuallySelectedPrimary, [group.id]: dup.comment.id })}
-                            >
-                              <div className="pt-0.5">
-                                <input
-                                  type="radio"
-                                  name={`primary-selector-${group.id}`}
-                                  checked={isSelectedPrimary}
-                                  onChange={() => {}}
-                                  className="accent-[#4A6741] cursor-pointer"
-                                />
-                              </div>
-                              <div className="flex-1 space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isSelectedPrimary ? 'text-[#4A6741]' : 'text-[#A13D2D]'} flex items-center gap-1.5`}>
-                                    {isSelectedPrimary ? (
-                                      <>
-                                        <Check className="w-3.5 h-3.5" /> Retained Record (Primary Copy)
-                                      </>
-                                    ) : (
-                                      <>
-                                        <AlertTriangle className="w-3.5 h-3.5" /> Redundant Duplicate (Match similarity: {(dup.similarity * 100).toFixed(1)}%)
-                                      </>
-                                    )}
-                                  </span>
-                                  <span className="text-[10px] font-mono text-gray-400 font-medium bg-gray-100 border border-gray-200/50 px-1.5 py-0.5">
-                                    {getRowDescriptor(dup.comment)}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-[#1A1A1A] font-serif italic leading-relaxed">
-                                  "{dup.comment.text}"
-                                </p>
-                                
-                                {/* Metadata pills */}
-                                <div className="flex flex-wrap gap-2 pt-1.5">
-                                  <span className="text-[9px] font-semibold bg-[#F9F8F6] border border-[#E5E3DF] text-gray-500 px-2 py-0.5">
-                                    Topic: {dup.comment.topic}
-                                  </span>
-                                  <span className="text-[9px] font-semibold bg-[#F9F8F6] border border-[#E5E3DF] text-gray-500 px-2 py-0.5 uppercase">
-                                    Sentiment: {dup.comment.sentiment}
-                                  </span>
-                                  {dup.comment.originalRowData && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setExpandedCommentId(expandedCommentId === dup.comment.id ? null : dup.comment.id);
-                                      }}
-                                      className="text-[9px] text-[#4A6741] hover:underline flex items-center gap-1 font-semibold ml-auto"
-                                    >
-                                      <Eye className="w-3 h-3" /> Inspect original row cols
-                                    </button>
-                                  )}
-                                </div>
-
-                                {/* CSV Inspector panel */}
-                                {expandedCommentId === dup.comment.id && dup.comment.originalRowData && (
-                                  <div className="bg-[#F9F8F6] border border-[#E5E3DF] p-3 text-[11px] font-mono text-gray-600 mt-2 space-y-1">
-                                    <p className="text-[9px] font-bold uppercase text-gray-400 mb-1 border-b border-gray-200 pb-0.5">Original File Columns</p>
-                                    {Object.entries(dup.comment.originalRowData).map(([k, v]) => (
-                                      <div key={k} className="flex justify-between gap-4">
-                                        <span className="text-gray-400 font-bold">{k}:</span>
-                                        <span className="text-right text-gray-800 break-all">{v || "(empty)"}</span>
-                                      </div>
-                                    ))}
-                                  </div>
+                              <p className="text-xs text-[#1A1A1A] font-serif italic leading-relaxed">
+                                "{group.originalComment.text}"
+                              </p>
+                              
+                              {/* Metadata Pill Indicators */}
+                              <div className="flex flex-wrap gap-2 pt-1.5">
+                                <span className="text-[9px] font-semibold bg-[#F9F8F6] border border-[#E5E3DF] text-gray-500 px-2 py-0.5">
+                                  Topic: {group.originalComment.topic}
+                                </span>
+                                <span className="text-[9px] font-semibold bg-[#F9F8F6] border border-[#E5E3DF] text-gray-500 px-2 py-0.5 uppercase">
+                                  Sentiment: {group.originalComment.sentiment}
+                                </span>
+                                {group.originalComment.originalRowData && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedCommentId(expandedCommentId === group.originalComment.id ? null : group.originalComment.id);
+                                    }}
+                                    className="text-[9px] text-[#4A6741] hover:underline flex items-center gap-1 font-semibold ml-auto"
+                                  >
+                                    <Eye className="w-3 h-3" /> Inspect original row cols
+                                  </button>
                                 )}
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
 
-                    {/* Control Bar for the group */}
-                    <div className="px-5 py-3.5 bg-[#F9F8F6] flex flex-wrap items-center justify-between gap-4">
-                      <span className="text-[10px] text-gray-500 italic font-serif">
-                        Retains one verified primary item. Actioning will archive non-selected matching records.
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleBulkDismissGroup(group)}
-                          className="px-3.5 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-[#1A1A1A] border border-[#1A1A1A] hover:bg-white rounded-none transition-colors bg-white cursor-pointer"
-                        >
-                          Keep All In Group
-                        </button>
-                        <button
-                          onClick={() => handleBulkArchiveGroup(group)}
-                          className="px-3.5 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-white bg-[#A13D2D] hover:bg-[#A13D2D]/90 rounded-none transition-all flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3 h-3" /> Archive Redundant Duplicates
-                        </button>
+                              {/* CSV Inspector panel */}
+                              {expandedCommentId === group.originalComment.id && group.originalComment.originalRowData && (
+                                <div className="bg-[#F9F8F6] border border-[#E5E3DF] p-3 text-[11px] font-mono text-gray-600 mt-2 space-y-1">
+                                  <p className="text-[9px] font-bold uppercase text-gray-400 mb-1 border-b border-gray-200 pb-0.5">Original File Columns</p>
+                                  {Object.entries(group.originalComment.originalRowData).map(([k, v]) => (
+                                    <div key={k} className="flex justify-between gap-4">
+                                      <span className="text-gray-400 font-bold">{k}:</span>
+                                      <span className="text-right text-gray-800 break-all">{v || "(empty)"}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 2. Duplicates options */}
+                          {group.duplicates.map((dup) => {
+                            const isSelectedPrimary = manuallySelectedPrimary[group.id] === dup.comment.id;
+                            return (
+                              <div 
+                                key={dup.comment.id}
+                                className={`p-4 border transition-colors cursor-pointer flex items-start gap-4 ${
+                                  isSelectedPrimary
+                                    ? "bg-[#4A6741]/5 border-[#4A6741]/35"
+                                    : "bg-white border-[#E5E3DF] hover:bg-gray-50"
+                                }`}
+                                onClick={() => setManuallySelectedPrimary({ ...manuallySelectedPrimary, [group.id]: dup.comment.id })}
+                              >
+                                <div className="pt-0.5">
+                                  <input
+                                    type="radio"
+                                    name={`primary-selector-${group.id}`}
+                                    checked={isSelectedPrimary}
+                                    onChange={() => {}}
+                                    className="accent-[#4A6741] cursor-pointer"
+                                  />
+                                </div>
+                                <div className="flex-1 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isSelectedPrimary ? 'text-[#4A6741]' : 'text-[#A13D2D]'} flex items-center gap-1.5`}>
+                                      {isSelectedPrimary ? (
+                                        <>
+                                          <Check className="w-3.5 h-3.5" /> Retained Record (Primary Copy)
+                                        </>
+                                      ) : (
+                                        <>
+                                          <AlertTriangle className="w-3.5 h-3.5" /> Redundant Duplicate (Match similarity: {(dup.similarity * 100).toFixed(1)}%)
+                                        </>
+                                      )}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-gray-400 font-medium bg-gray-100 border border-gray-200/50 px-1.5 py-0.5">
+                                      {getRowDescriptor(dup.comment)}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-[#1A1A1A] font-serif italic leading-relaxed">
+                                    "{dup.comment.text}"
+                                  </p>
+                                  
+                                  {/* Metadata pills */}
+                                  <div className="flex flex-wrap gap-2 pt-1.5">
+                                    <span className="text-[9px] font-semibold bg-[#F9F8F6] border border-[#E5E3DF] text-gray-500 px-2 py-0.5">
+                                      Topic: {dup.comment.topic}
+                                    </span>
+                                    <span className="text-[9px] font-semibold bg-[#F9F8F6] border border-[#E5E3DF] text-gray-500 px-2 py-0.5 uppercase">
+                                      Sentiment: {dup.comment.sentiment}
+                                    </span>
+                                    {dup.comment.originalRowData && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setExpandedCommentId(expandedCommentId === dup.comment.id ? null : dup.comment.id);
+                                        }}
+                                        className="text-[9px] text-[#4A6741] hover:underline flex items-center gap-1 font-semibold ml-auto"
+                                      >
+                                        <Eye className="w-3 h-3" /> Inspect original row cols
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {/* CSV Inspector panel */}
+                                  {expandedCommentId === dup.comment.id && dup.comment.originalRowData && (
+                                    <div className="bg-[#F9F8F6] border border-[#E5E3DF] p-3 text-[11px] font-mono text-gray-600 mt-2 space-y-1">
+                                      <p className="text-[9px] font-bold uppercase text-gray-400 mb-1 border-b border-gray-200 pb-0.5">Original File Columns</p>
+                                      {Object.entries(dup.comment.originalRowData).map(([k, v]) => (
+                                        <div key={k} className="flex justify-between gap-4">
+                                          <span className="text-gray-400 font-bold">{k}:</span>
+                                          <span className="text-right text-gray-800 break-all">{v || "(empty)"}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Control Bar for the group */}
+                      <div className="px-5 py-3.5 bg-[#F9F8F6] flex flex-wrap items-center justify-between gap-4">
+                        <span className="text-[10px] text-gray-500 italic font-serif">
+                          Retains one verified primary item. Actioning will archive non-selected matching records.
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleBulkDismissGroup(group)}
+                            className="px-3.5 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-[#1A1A1A] border border-[#1A1A1A] hover:bg-white rounded-none transition-colors bg-white cursor-pointer"
+                          >
+                            Keep All In Group
+                          </button>
+                          <button
+                            onClick={() => handleBulkArchiveGroup(group)}
+                            className="px-3.5 py-1.5 text-[10px] uppercase tracking-wider font-semibold text-white bg-[#A13D2D] hover:bg-[#A13D2D]/90 rounded-none transition-all flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" /> Archive Redundant Duplicates
+                          </button>
+                        </div>
                       </div>
                     </div>
+                  );
+                })
+              ) : (
+                <div className="bg-white p-12 border border-[#E5E3DF] text-center flex flex-col items-center justify-center rounded-none">
+                  <div className="w-12 h-12 border border-[#E5E3DF] text-gray-400 rounded-none flex items-center justify-center mb-4 bg-[#F9F8F6]">
+                    <Search className="w-5 h-5 text-gray-400" />
                   </div>
-                );
-              })
+                  <h3 className="font-serif italic text-lg text-[#1A1A1A] mb-1">No matching clusters found</h3>
+                  <p className="text-xs text-gray-400 max-w-sm leading-relaxed mb-4">
+                    No duplicate clusters contain the keyword <strong className="text-[#A13D2D]">"{searchQuery}"</strong> in their feedback content, labels, or row indexes.
+                  </p>
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="px-4 py-2 bg-[#1A1A1A] hover:bg-[#1A1A1A]/90 text-white font-mono text-[10px] uppercase tracking-wider rounded-none cursor-pointer transition-colors"
+                  >
+                    Clear Filter
+                  </button>
+                </div>
+              )
             ) : (
               <div className="bg-white p-16 border border-[#E5E3DF] text-center flex flex-col items-center justify-center rounded-none">
                 <div className="w-12 h-12 border border-[#E5E3DF] text-[#4A6741] rounded-none flex items-center justify-center mb-4 bg-[#F9F8F6]">

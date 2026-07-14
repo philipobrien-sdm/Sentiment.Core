@@ -276,6 +276,9 @@ export default function App() {
     const selectedEmbedding = getCommentEmbedding(selectedComment, llmSettings.useCustomEmbedding);
     if (!selectedEmbedding || selectedEmbedding.length === 0) return [];
     
+    // Lower threshold for user query node to find matching items visually aligned on the map
+    const cutoffThreshold = selectedComment.id === "user_query_node" ? 0.3 : 0.5;
+    
     return comments
       .filter((c) => c.id !== selectedComment.id && !c.isArchived)
       .map((c) => {
@@ -283,7 +286,7 @@ export default function App() {
         const similarity = cEmbedding ? calculateCosineSimilarity(selectedEmbedding, cEmbedding) : 0;
         return { comment: c, similarity };
       })
-      .filter((res) => res.similarity >= 0.5) // Only display matches with 50%+ similarity
+      .filter((res) => res.similarity >= cutoffThreshold) // Display matches above appropriate threshold
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 5); // top 5 matches
   }, [comments, selectedComment, llmSettings.useCustomEmbedding]);
@@ -994,83 +997,145 @@ Format the response using beautiful, professional Markdown including:
 
                     {/* B. Active Comment details or fallback instruction */}
                     {selectedComment ? (
-                      <div className="bg-white p-6 border border-[#E5E3DF] space-y-4 animate-in fade-in duration-200 rounded-none">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] bg-[#F9F8F6] text-[#1A1A1A] font-semibold px-2 py-0.5 border border-[#E5E3DF] font-mono">
-                            {selectedComment.id}
-                          </span>
-                          <button
-                            onClick={() => handleArchiveComment(selectedComment.id)}
-                            title="Archive Comment"
-                            className="p-1.5 text-gray-400 hover:text-[#A13D2D] hover:bg-[#A13D2D]/5 rounded-none transition-all cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <div className="bg-[#F9F8F6] p-4 border border-[#E5E3DF] max-h-36 overflow-y-auto rounded-none">
-                          <p className="text-xs text-[#1A1A1A] leading-relaxed font-serif italic">
-                            "{selectedComment.text}"
-                          </p>
-                        </div>
-
-                        {/* Meta modifier selectors */}
-                        <div className="grid grid-cols-2 gap-4 text-xs">
-                          <div>
-                            <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Sentiment</label>
-                            <select
-                              value={selectedComment.sentiment}
-                              onChange={(e) => handleUpdateSelectedMetadata({ sentiment: e.target.value as any })}
-                              className="w-full bg-white border border-[#E5E3DF] px-2 py-1.5 text-xs rounded-none focus:outline-none focus:border-[#1A1A1A]"
-                            >
-                              <option value="positive">Positive</option>
-                              <option value="neutral">Neutral</option>
-                              <option value="negative">Negative</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Topic Cluster</label>
-                            <select
-                              value={selectedComment.topic}
-                              onChange={(e) => handleUpdateSelectedMetadata({ topic: e.target.value })}
-                              className="w-full bg-white border border-[#E5E3DF] px-2 py-1.5 text-xs rounded-none focus:outline-none focus:border-[#1A1A1A]"
-                            >
-                              <option value="Performance & Speed">Performance & Speed</option>
-                              <option value="UI/UX & Layout">UI/UX & Layout</option>
-                              <option value="Bugs & Crashes">Bugs & Crashes</option>
-                              <option value="Pricing & Value">Pricing & Value</option>
-                              <option value="Features & Requests">Features & Requests</option>
-                              <option value="General Feedback">General Feedback</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Vector Neighbors similarity display */}
-                        {similarToSelected.length > 0 && (
-                          <div className="pt-4 border-t border-[#E5E3DF]">
-                            <span className="text-[10px] uppercase font-bold tracking-widest text-[#1A1A1A]/60 block mb-2">
-                              Nearest Semantic Neighbors
+                      selectedComment.id === "user_query_node" ? (
+                        <div className="bg-white p-6 border border-[#E5E3DF] space-y-4 animate-in fade-in duration-200 rounded-none">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] bg-[#ec4899]/10 text-[#ec4899] font-bold px-2.5 py-0.5 border border-[#ec4899]/30 font-mono uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_4px_rgba(236,72,153,0.1)]">
+                              <Sparkle className="w-3.5 h-3.5 animate-pulse" />
+                              Active Search Query
                             </span>
-                            <div className="space-y-1">
-                              {similarToSelected.map(({ comment, similarity }) => (
-                                <button
-                                  key={comment.id}
-                                  onClick={() => setSelectedCommentId(comment.id)}
-                                  className="w-full p-2 hover:bg-[#F9F8F6] border border-transparent hover:border-[#E5E3DF] text-left transition-colors flex items-center justify-between gap-3 text-xs rounded-none cursor-pointer"
-                                >
-                                  <p className="truncate font-medium text-gray-700 flex-1">
-                                    "{comment.text}"
-                                  </p>
-                                  <span className="text-[10px] font-bold font-mono text-[#4A6741] bg-[#4A6741]/5 border border-[#4A6741]/20 px-1.5 py-0.5 rounded-none">
-                                    {(similarity * 100).toFixed(0)}%
-                                  </span>
-                                </button>
-                              ))}
+                            <button
+                              onClick={handleClearQueryNode}
+                              title="Remove search query node from map"
+                              className="px-2 py-1 text-[9px] uppercase tracking-wider font-semibold text-[#A13D2D] hover:bg-[#A13D2D]/5 border border-[#A13D2D]/20 hover:border-[#A13D2D]/40 transition-all cursor-pointer rounded-none"
+                            >
+                              Remove from Map
+                            </button>
+                          </div>
+
+                          <div className="bg-[#F9F8F6] p-4 border border-[#E5E3DF] max-h-36 overflow-y-auto rounded-none">
+                            <p className="text-xs text-[#1A1A1A] leading-relaxed font-serif italic font-medium">
+                              "{selectedComment.text}"
+                            </p>
+                          </div>
+
+                          <div className="text-[11px] text-gray-500 leading-relaxed bg-[#ec4899]/5 p-3.5 border border-[#ec4899]/15">
+                            This virtual coordinate node is projected inside the map to help you visually locate semantic groupings relative to the search query. Click the similar neighboring points below to inspect feedback.
+                          </div>
+
+                          {/* Vector Neighbors similarity display */}
+                          {similarToSelected.length > 0 ? (
+                            <div className="pt-4 border-t border-[#E5E3DF]">
+                              <span className="text-[10px] uppercase font-bold tracking-widest text-[#1A1A1A]/60 block mb-2">
+                                Nearest Semantic Neighbors ({similarToSelected.length})
+                              </span>
+                              <div className="space-y-1">
+                                {similarToSelected.map(({ comment, similarity }) => (
+                                  <button
+                                    key={comment.id}
+                                    onClick={() => setSelectedCommentId(comment.id)}
+                                    className="w-full p-2 hover:bg-[#F9F8F6] border border-transparent hover:border-[#E5E3DF] text-left transition-colors flex items-center justify-between gap-3 text-xs rounded-none cursor-pointer"
+                                  >
+                                    <p className="truncate font-medium text-gray-700 flex-1">
+                                      "{comment.text}"
+                                    </p>
+                                    <span className="text-[10px] font-bold font-mono text-[#ec4899] bg-[#ec4899]/5 border border-[#ec4899]/20 px-1.5 py-0.5 rounded-none">
+                                      {(similarity * 100).toFixed(0)}%
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="pt-4 border-t border-[#E5E3DF] text-center py-4">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                                No similar nodes detected
+                              </span>
+                              <span className="text-[9px] text-gray-400 mt-0.5 block">
+                                Try a broader search phrase to pull in neighbors.
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="bg-white p-6 border border-[#E5E3DF] space-y-4 animate-in fade-in duration-200 rounded-none">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] bg-[#F9F8F6] text-[#1A1A1A] font-semibold px-2 py-0.5 border border-[#E5E3DF] font-mono">
+                              {selectedComment.id}
+                            </span>
+                            <button
+                              onClick={() => handleArchiveComment(selectedComment.id)}
+                              title="Archive Comment"
+                              className="p-1.5 text-gray-400 hover:text-[#A13D2D] hover:bg-[#A13D2D]/5 rounded-none transition-all cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="bg-[#F9F8F6] p-4 border border-[#E5E3DF] max-h-36 overflow-y-auto rounded-none">
+                            <p className="text-xs text-[#1A1A1A] leading-relaxed font-serif italic">
+                              "{selectedComment.text}"
+                            </p>
+                          </div>
+
+                          {/* Meta modifier selectors */}
+                          <div className="grid grid-cols-2 gap-4 text-xs">
+                            <div>
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Sentiment</label>
+                              <select
+                                value={selectedComment.sentiment}
+                                onChange={(e) => handleUpdateSelectedMetadata({ sentiment: e.target.value as any })}
+                                className="w-full bg-white border border-[#E5E3DF] px-2 py-1.5 text-xs rounded-none focus:outline-none focus:border-[#1A1A1A]"
+                              >
+                                <option value="positive">Positive</option>
+                                <option value="neutral">Neutral</option>
+                                <option value="negative">Negative</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Topic Cluster</label>
+                              <select
+                                value={selectedComment.topic}
+                                onChange={(e) => handleUpdateSelectedMetadata({ topic: e.target.value })}
+                                className="w-full bg-white border border-[#E5E3DF] px-2 py-1.5 text-xs rounded-none focus:outline-none focus:border-[#1A1A1A]"
+                              >
+                                <option value="Performance & Speed">Performance & Speed</option>
+                                <option value="UI/UX & Layout">UI/UX & Layout</option>
+                                <option value="Bugs & Crashes">Bugs & Crashes</option>
+                                <option value="Pricing & Value">Pricing & Value</option>
+                                <option value="Features & Requests">Features & Requests</option>
+                                <option value="General Feedback">General Feedback</option>
+                              </select>
                             </div>
                           </div>
-                        )}
-                      </div>
+
+                          {/* Vector Neighbors similarity display */}
+                          {similarToSelected.length > 0 && (
+                            <div className="pt-4 border-t border-[#E5E3DF]">
+                              <span className="text-[10px] uppercase font-bold tracking-widest text-[#1A1A1A]/60 block mb-2">
+                                Nearest Semantic Neighbors
+                              </span>
+                              <div className="space-y-1">
+                                {similarToSelected.map(({ comment, similarity }) => (
+                                  <button
+                                    key={comment.id}
+                                    onClick={() => setSelectedCommentId(comment.id)}
+                                    className="w-full p-2 hover:bg-[#F9F8F6] border border-transparent hover:border-[#E5E3DF] text-left transition-colors flex items-center justify-between gap-3 text-xs rounded-none cursor-pointer"
+                                  >
+                                    <p className="truncate font-medium text-gray-700 flex-1">
+                                      "{comment.text}"
+                                    </p>
+                                    <span className="text-[10px] font-bold font-mono text-[#4A6741] bg-[#4A6741]/5 border border-[#4A6741]/20 px-1.5 py-0.5 rounded-none">
+                                      {(similarity * 100).toFixed(0)}%
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
                     ) : (
                       <div className="bg-white p-8 border border-[#E5E3DF] text-center flex flex-col items-center justify-center min-h-[220px] rounded-none shadow-none">
                         <div className="w-10 h-10 border border-[#E5E3DF] text-gray-400 rounded-none flex items-center justify-center mb-3">
