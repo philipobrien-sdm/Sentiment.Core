@@ -33,6 +33,7 @@ export interface LlmSettings {
   embeddingModel: string;
   apiKey: string;
   useCustomEmbedding: boolean; // false = use built-in heuristic embeddings, true = use custom local embeddings endpoint
+  customPersona?: string; // custom instructions or personality profile (e.g. "you are a senior policy analyst")
 }
 
 export interface DuplicatePair {

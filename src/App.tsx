@@ -106,7 +106,11 @@ export default function App() {
     const saved = localStorage.getItem("llm_settings");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (!parsed.customPersona) {
+          parsed.customPersona = "You are a Senior Strategic Product & Customer Experience Analyst. Focus heavily on stakeholder sentiment, correctly infer user intent from context, and reconcile opposing friction points while maintaining complete factual integrity with zero hallucinations.";
+        }
+        return parsed;
       } catch (e) {}
     }
     return {
@@ -115,7 +119,8 @@ export default function App() {
       embeddingUrl: "http://localhost:11434/v1",
       embeddingModel: "nomic-embed-text",
       apiKey: "",
-      useCustomEmbedding: false
+      useCustomEmbedding: false,
+      customPersona: "You are a Senior Strategic Product & Customer Experience Analyst. Focus heavily on stakeholder sentiment, correctly infer user intent from context, and reconcile opposing friction points while maintaining complete factual integrity with zero hallucinations."
     };
   });
 
@@ -316,6 +321,32 @@ export default function App() {
     if (!selectedCommentId) return null;
     return comments.find((c) => c.id === selectedCommentId && !c.isArchived) || null;
   }, [comments, selectedCommentId]);
+
+  // Unique Topics extracted from active comments in the dataset
+  const datasetTopics = useMemo(() => {
+    const topicsSet = new Set<string>();
+    comments.forEach((c) => {
+      if (c.topic && c.topic.trim() && c.id !== "user_query_node" && !c.isArchived) {
+        topicsSet.add(c.topic);
+      }
+    });
+    // Ensure that if the selected comment has a topic, it's included in the list
+    if (selectedComment?.topic && selectedComment.topic.trim()) {
+      topicsSet.add(selectedComment.topic);
+    }
+    const sorted = Array.from(topicsSet).sort();
+    if (sorted.length === 0) {
+      return [
+        "Performance & Speed",
+        "UI/UX & Layout",
+        "Bugs & Crashes",
+        "Pricing & Value",
+        "Features & Requests",
+        "General Feedback"
+      ];
+    }
+    return sorted;
+  }, [comments, selectedComment]);
 
   // Similar items to the currently selected comment
   const similarToSelected = useMemo(() => {
@@ -1096,6 +1127,36 @@ Format your response using beautiful, structured Markdown. Make it professional 
                       className="w-full bg-white border border-[#E5E3DF] px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#1A1A1A] font-mono rounded-none"
                     />
                   </div>
+
+                  <div className="pt-3 border-t border-[#E5E3DF]">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="block text-[9px] font-bold uppercase tracking-widest text-gray-500">
+                        AI Persona & Analysis Guidelines
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLlmSettings({
+                            ...llmSettings,
+                            customPersona: "You are a Senior Strategic Product & Customer Experience Analyst. Focus heavily on stakeholder sentiment, correctly infer user intent from context, and reconcile opposing friction points while maintaining complete factual integrity with zero hallucinations."
+                          });
+                        }}
+                        className="text-[8px] uppercase tracking-wider text-[#4A6741] hover:underline cursor-pointer font-bold"
+                      >
+                        Reset to Default
+                      </button>
+                    </div>
+                    <textarea
+                      value={llmSettings.customPersona || ""}
+                      onChange={(e) => setLlmSettings({ ...llmSettings, customPersona: e.target.value })}
+                      placeholder="e.g., You are a senior policy analyst. You must focus on stakeholder sentiment. You must infer intent, but never make up factual information..."
+                      rows={5}
+                      className="w-full bg-white border border-[#E5E3DF] p-2.5 text-xs focus:outline-none focus:border-[#1A1A1A] font-sans rounded-none leading-relaxed resize-none"
+                    />
+                    <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-wider leading-relaxed">
+                      Customizes the AI's role, analytical focal points, and reasoning bounds for all reports, critiques, and multi-perspective contrast syntheses.
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -1547,12 +1608,11 @@ Format your response using beautiful, structured Markdown. Make it professional 
                                 onChange={(e) => handleUpdateSelectedMetadata({ topic: e.target.value })}
                                 className="w-full bg-white border border-[#E5E3DF] px-2 py-1.5 text-xs rounded-none focus:outline-none focus:border-[#1A1A1A]"
                               >
-                                <option value="Performance & Speed">Performance & Speed</option>
-                                <option value="UI/UX & Layout">UI/UX & Layout</option>
-                                <option value="Bugs & Crashes">Bugs & Crashes</option>
-                                <option value="Pricing & Value">Pricing & Value</option>
-                                <option value="Features & Requests">Features & Requests</option>
-                                <option value="General Feedback">General Feedback</option>
+                                {datasetTopics.map((topicName) => (
+                                  <option key={topicName} value={topicName}>
+                                    {topicName}
+                                  </option>
+                                ))}
                               </select>
                             </div>
                           </div>

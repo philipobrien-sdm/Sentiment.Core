@@ -229,7 +229,7 @@ export async function fetchLocalCompletion(
     messages: [
       {
         role: "system",
-        content: "You are a senior analyst compiling structured executive reports from customer feedback. Respond using professional, elegant markdown with bullet points and bold headings."
+        content: (settings.customPersona?.trim() || "You are a senior analyst compiling structured executive reports from customer feedback.") + " Respond using professional, elegant markdown with bullet points and bold headings."
       },
       {
         role: "user",

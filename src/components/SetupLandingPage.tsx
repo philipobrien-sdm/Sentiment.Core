@@ -520,6 +520,36 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
                 </div>
               )}
             </div>
+
+            <div className="pt-3 border-t border-[#E5E3DF] space-y-2">
+              <div className="flex justify-between items-center">
+                <label className="block text-[9px] font-bold uppercase tracking-widest text-gray-500">
+                  AI Persona & Analysis Guidelines
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChangeSettings({
+                      ...llmSettings,
+                      customPersona: "You are a Senior Strategic Product & Customer Experience Analyst. Focus heavily on stakeholder sentiment, correctly infer user intent from context, and reconcile opposing friction points while maintaining complete factual integrity with zero hallucinations."
+                    });
+                  }}
+                  className="text-[8px] uppercase tracking-wider text-[#4A6741] hover:underline cursor-pointer font-bold"
+                >
+                  Reset to Default
+                </button>
+              </div>
+              <textarea
+                value={llmSettings.customPersona || ""}
+                onChange={(e) => onChangeSettings({ ...llmSettings, customPersona: e.target.value })}
+                placeholder="e.g., You are a senior policy analyst. You must focus on stakeholder sentiment. You must infer intent, but never make up factual information..."
+                rows={4}
+                className="w-full bg-white border border-[#E5E3DF] p-2.5 text-xs focus:outline-none focus:border-[#1A1A1A] font-sans rounded-none leading-relaxed resize-none"
+              />
+              <p className="text-[9px] text-gray-400 uppercase tracking-wider leading-relaxed">
+                Define custom roles, analytical focal points, or strict rules the AI must adhere to during synthesis.
+              </p>
+            </div>
           </div>
         </div>
 
