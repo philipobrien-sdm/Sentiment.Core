@@ -52,6 +52,8 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
   const [selectedTextField, setSelectedTextField] = useState<string>("");
   const [selectedSentimentField, setSelectedSentimentField] = useState<string>("");
   const [selectedTopicField, setSelectedTopicField] = useState<string>("");
+  const [selectedIdField, setSelectedIdField] = useState<string>("");
+  const [selectedOrgField, setSelectedOrgField] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
@@ -132,10 +134,20 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
               const lower = h.toLowerCase();
               return lower.includes("topic") || lower.includes("category") || lower.includes("theme");
             });
+            const idHeader = headers.find((h) => {
+              const lower = h.toLowerCase();
+              return lower === "id" || lower.includes("identifier") || lower.includes("comment id") || lower.includes("row id") || lower.includes("feedback id");
+            });
+            const orgHeader = headers.find((h) => {
+              const lower = h.toLowerCase();
+              return lower.includes("org") || lower.includes("company") || lower.includes("organization") || lower.includes("account");
+            });
 
             setSelectedTextField(commentHeader || headers[0]);
             setSelectedSentimentField(sentimentHeader || "");
             setSelectedTopicField(topicHeader || "");
+            setSelectedIdField(idHeader || "");
+            setSelectedOrgField(orgHeader || "");
           } else {
             setErrorMessage("The uploaded CSV file is empty.");
           }
@@ -197,8 +209,12 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
               topic = row[selectedTopicField];
             }
 
+            const parsedId = selectedIdField && row[selectedIdField] ? String(row[selectedIdField]).trim() : "";
+            const finalId = parsedId || `csv_backup_${idx + 1}_${Math.random().toString(36).substr(2, 4)}`;
+            const orgName = selectedOrgField && row[selectedOrgField] ? String(row[selectedOrgField]).trim() : undefined;
+
             return {
-              id: `csv_backup_${idx + 1}_${Math.random().toString(36).substr(2, 4)}`,
+              id: finalId,
               text,
               sentiment,
               topic,
@@ -208,6 +224,8 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
               isArchived: false,
               timestamp: new Date().toISOString().split('T')[0],
               csvRowIndex: idx + 1,
+              originalId: parsedId || finalId,
+              organizationName: orgName || undefined,
               originalRowData: row
             };
           });
@@ -271,8 +289,12 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
           topic = row[selectedTopicField];
         }
 
+        const parsedId = selectedIdField && row[selectedIdField] ? String(row[selectedIdField]).trim() : "";
+        const finalId = parsedId || `csv_${idx + 1}_${Math.random().toString(36).substr(2, 4)}`;
+        const orgName = selectedOrgField && row[selectedOrgField] ? String(row[selectedOrgField]).trim() : undefined;
+
         return {
-          id: `csv_${idx + 1}_${Math.random().toString(36).substr(2, 4)}`,
+          id: finalId,
           text,
           sentiment,
           topic,
@@ -282,6 +304,8 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
           isArchived: false,
           timestamp: new Date().toISOString().split('T')[0],
           csvRowIndex: idx + 1,
+          originalId: parsedId || finalId,
+          organizationName: orgName || undefined,
           originalRowData: row
         };
       });
@@ -599,6 +623,38 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
                       className="w-full bg-white border border-[#E5E3DF] px-2 py-1.5 rounded-none text-xs focus:outline-none"
                     >
                       <option value="">-- Auto-cluster by keywords --</option>
+                      {csvPreview.headers.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">
+                      Comment ID Column (Optional)
+                    </label>
+                    <select
+                      value={selectedIdField}
+                      onChange={(e) => setSelectedIdField(e.target.value)}
+                      className="w-full bg-white border border-[#E5E3DF] px-2 py-1.5 rounded-none text-xs focus:outline-none"
+                    >
+                      <option value="">-- Auto-generate unique IDs --</option>
+                      {csvPreview.headers.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">
+                      Organization Name Column (Optional)
+                    </label>
+                    <select
+                      value={selectedOrgField}
+                      onChange={(e) => setSelectedOrgField(e.target.value)}
+                      className="w-full bg-white border border-[#E5E3DF] px-2 py-1.5 rounded-none text-xs focus:outline-none"
+                    >
+                      <option value="">-- None / No organization data --</option>
                       {csvPreview.headers.map(h => (
                         <option key={h} value={h}>{h}</option>
                       ))}

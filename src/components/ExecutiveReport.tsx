@@ -1,6 +1,6 @@
 import React from "react";
 import { CommentItem } from "../types";
-import { Sparkles, FileText, Download, Loader2, ArrowRight } from "lucide-react";
+import { Sparkles, FileText, Download, Loader2, ArrowRight, History } from "lucide-react";
 import { MarkdownViewer } from "./MarkdownViewer";
 
 interface ExecutiveReportProps {
@@ -9,6 +9,8 @@ interface ExecutiveReportProps {
   isSummarizing: boolean;
   onGenerateSummary: () => void;
   apiMode: 'live' | 'demo';
+  onOpenHistory?: () => void;
+  historyCount?: number;
 }
 
 export const ExecutiveReport: React.FC<ExecutiveReportProps> = ({
@@ -17,6 +19,8 @@ export const ExecutiveReport: React.FC<ExecutiveReportProps> = ({
   isSummarizing,
   onGenerateSummary,
   apiMode,
+  onOpenHistory,
+  historyCount = 0,
 }) => {
   const activeComments = comments.filter((c) => !c.isArchived);
 
@@ -51,6 +55,16 @@ export const ExecutiveReport: React.FC<ExecutiveReportProps> = ({
             <span className="text-[10px] bg-[#A13D2D]/10 border border-[#A13D2D]/20 text-[#A13D2D] px-2.5 py-1 rounded-none font-semibold font-mono uppercase tracking-wider">
               Local Heuristics
             </span>
+          )}
+
+          {onOpenHistory && (
+            <button
+              onClick={onOpenHistory}
+              className="px-3 py-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] rounded-none text-[10px] uppercase tracking-widest font-semibold flex items-center gap-1.5 transition-colors bg-white cursor-pointer"
+              title="Open LLM critique history modal"
+            >
+              <History className="w-3.5 h-3.5 text-amber-500" /> Synthesis History ({historyCount})
+            </button>
           )}
 
           {executiveSummary && (

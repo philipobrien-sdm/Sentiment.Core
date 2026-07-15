@@ -9,6 +9,7 @@ import { ExecutiveReport } from "./components/ExecutiveReport";
 import { ImportExport } from "./components/ImportExport";
 import { SetupLandingPage } from "./components/SetupLandingPage";
 import { SemanticQuery } from "./components/SemanticQuery";
+import { CommentsList } from "./components/CommentsList";
 import { SynthesisModal, SavedSynthesis } from "./components/SynthesisModal";
 import { getCachedEmbedding, loadEmbeddingsIntoCache, setCachedEmbedding, getCommentEmbedding } from "./utils/embeddingsCache";
 import { 
@@ -43,7 +44,8 @@ import {
   Server,
   Loader2,
   Eye,
-  History
+  History,
+  List
 } from "lucide-react";
 
 export default function App() {
@@ -77,7 +79,7 @@ export default function App() {
   const [isAnalyzingNeighborhood, setIsAnalyzingNeighborhood] = useState<boolean>(false);
   const [neighborhoodSynthesis, setNeighborhoodSynthesis] = useState<string | null>(null);
   const [expandedOriginalRow, setExpandedOriginalRow] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'explore' | 'duplicates' | 'report' | 'data' | 'query'>('explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'list' | 'duplicates' | 'report' | 'data' | 'query'>('explore');
   const [colorMode, setColorMode] = useState<'sentiment' | 'topic'>('sentiment');
 
   // Critique Modal & History states
@@ -201,10 +203,14 @@ export default function App() {
   const [filters, setFilters] = useState<FilterState>({
     sentiments: [],
     topics: [],
+    organizations: [],
     searchQuery: "",
     showDuplicatesOnly: false,
     similarityThreshold: 0.85,
   });
+
+  // State to hold comments before a smart re-clustering run, enabling full revert/undo.
+  const [previousCommentsBeforeReclustering, setPreviousCommentsBeforeReclustering] = useState<CommentItem[] | null>(null);
 
   // Reset selected comment neighborhood critique and column details state on selection change
   useEffect(() => {
@@ -285,6 +291,12 @@ export default function App() {
 
       // Filter by Topic cluster list
       if (filters.topics.length > 0 && !filters.topics.includes(item.topic)) return false;
+
+      // Filter by Organization list
+      if (filters.organizations && filters.organizations.length > 0) {
+        const org = item.organizationName || "(No Organization)";
+        if (!filters.organizations.includes(org)) return false;
+      }
 
       // Filter by Search text query (case-insensitive)
       if (filters.searchQuery.trim().length > 0) {
@@ -391,6 +403,24 @@ export default function App() {
     }
   };
 
+  // Helper to append traceability nodes register at the end of generated reviews/reports
+  const generateTraceabilitySection = (nodes: CommentItem[]): string => {
+    if (!nodes || nodes.length === 0) return "";
+    let section = `\n\n---\n\n### 📋 Traceability Register: Referenced Feedback Nodes\n`;
+    section += `This report synthesized the following **${nodes.length} comments** directly from the active filtered workspace:\n\n`;
+    section += `| Comment ID | Organization Name | Feedback Comment Text |\n`;
+    section += `| :--- | :--- | :--- |\n`;
+    nodes.forEach((c) => {
+      const id = c.id;
+      const org = c.organizationName || "*(No Organization)*";
+      const textSnippet = c.text.length > 150 ? `${c.text.substring(0, 150)}...` : c.text;
+      // Escape newlines and pipes to preserve table format
+      const cleanTextSnippet = textSnippet.replace(/[\n\r]+/g, " ").replace(/\|/g, "\\|");
+      section += `| \`${id}\` | ${org} | ${cleanTextSnippet} |\n`;
+    });
+    return section;
+  };
+
   // 5. API Event: Generate Summary
   const handleGenerateSummary = async () => {
     setIsSummarizing(true);
@@ -398,13 +428,14 @@ export default function App() {
 
     try {
       let summaryText = "";
+      const nodesUsed = filteredComments.slice(0, 80);
       
       const structuredPrompt = `You are a Principal Customer Experience & Data Analyst.
 Analyze the following stakeholder comments collected from an update or product release.
 Provide an executive synthesis summarizing stakeholder sentiment, core themes, recurring pain points, and action items.
 
 Comments Dataset:
-${filteredComments.slice(0, 80).map((c, i) => `[Comment ${i+1}] Topic: "${c.topic}", Sentiment: "${c.sentiment}"\nText: "${c.text}"`).join("\n---\n")}
+${nodesUsed.map((c, i) => `[Comment ${i+1}] Topic: "${c.topic}", Sentiment: "${c.sentiment}"\nText: "${c.text}"`).join("\n---\n")}
 
 Format the response using beautiful, professional Markdown including:
 1. **Executive Summary**: A concise paragraph of the overall stakeholder mood.
@@ -421,7 +452,8 @@ Format the response using beautiful, professional Markdown including:
         summaryText = generateLocalHeuristicSummary(filteredComments);
       }
 
-      setExecutiveSummary(summaryText);
+      const tracedText = summaryText + generateTraceabilitySection(nodesUsed);
+      setExecutiveSummary(tracedText);
       setIsSummarizing(false);
     } catch (err: any) {
       setIsSummarizing(false);
@@ -454,6 +486,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
 4. **Concrete Next Steps**: 2-3 strategic developer/product recommendations.`;
 
     try {
+      const neighborhoodNodes = [selectedComment, ...similarToSelected.map((r) => r.comment)];
       let synthesisText = "";
       try {
         synthesisText = await fetchLocalCompletion(structuredPrompt, llmSettings);
@@ -463,12 +496,14 @@ Format your response using beautiful, structured Markdown. Make it professional 
         showToast("Local LLM offline. Compiled client-side subset critique.", "info");
         synthesisText = generateLocalHeuristicNeighborhoodSynthesis(selectedComment, similarToSelected);
       }
-      setNeighborhoodSynthesis(synthesisText);
+
+      const tracedText = synthesisText + generateTraceabilitySection(neighborhoodNodes);
+      setNeighborhoodSynthesis(tracedText);
 
       const newHistoryItem: SavedSynthesis = {
         id: `map_${selectedComment.id}_${Date.now()}`,
         title: `Neighborhood of ${selectedComment.id} (${1 + similarToSelected.length} items)`,
-        markdown: synthesisText,
+        markdown: tracedText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
         source: "map"
       };
@@ -511,6 +546,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
 3. **Product & Audit Recommendation**: 2-3 specific strategic guidelines on how to resolve the root user friction and whether these rows are safe to archive/merge.`;
 
     try {
+      const clusterNodes = [group.originalComment, ...group.duplicates.map((d: any) => d.comment)];
       let synthesisText = "";
       try {
         synthesisText = await fetchLocalCompletion(structuredPrompt, llmSettings);
@@ -521,10 +557,12 @@ Format your response using beautiful, structured Markdown. Make it professional 
         synthesisText = generateLocalHeuristicClusterSynthesis(group.originalComment, group.duplicates, filters.similarityThreshold);
       }
 
+      const tracedText = synthesisText + generateTraceabilitySection(clusterNodes);
+
       const newHistoryItem: SavedSynthesis = {
         id: `cluster_${group.id}_${Date.now()}`,
         title: `Cluster #${groupIndex + 1} Audit (${totalMembers} items)`,
-        markdown: synthesisText,
+        markdown: tracedText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
         source: "cluster"
       };
@@ -575,6 +613,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
 4. **Action Recommendations**: 2-3 strategic guidelines for engineering or product teams.`;
 
     try {
+      const refinedNodes = realFiltered.slice(0, 30);
       let synthesisText = "";
       try {
         synthesisText = await fetchLocalCompletion(structuredPrompt, llmSettings);
@@ -585,12 +624,14 @@ Format your response using beautiful, structured Markdown. Make it professional 
         synthesisText = generateLocalHeuristicRefinedNodesSynthesis(realFiltered, activeQueryText);
       }
 
+      const tracedText = synthesisText + generateTraceabilitySection(refinedNodes);
+
       const newHistoryItem: SavedSynthesis = {
         id: `refined_${Date.now()}`,
         title: activeQueryText 
           ? `Refined Search: "${activeQueryText}" (${realFiltered.length} items)`
           : `Refined Nodes Subset (${realFiltered.length} items)`,
-        markdown: synthesisText,
+        markdown: tracedText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
         source: "map"
       };
@@ -636,6 +677,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
 3. **Product Resolutions**: 2-3 strategic actionable developer recommendations to address this feedback area.`;
 
     try {
+      const semanticNodes = results.slice(0, 30);
       let synthesisText = "";
       try {
         synthesisText = await fetchLocalCompletion(structuredPrompt, llmSettings);
@@ -646,10 +688,12 @@ Format your response using beautiful, structured Markdown. Make it professional 
         synthesisText = generateLocalHeuristicRefinedNodesSynthesis(results, queryText);
       }
 
+      const tracedText = synthesisText + generateTraceabilitySection(semanticNodes);
+
       const newHistoryItem: SavedSynthesis = {
         id: `semantic_${Date.now()}`,
         title: `Semantic Search: "${queryText}" (${results.length} items)`,
-        markdown: synthesisText,
+        markdown: tracedText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
         source: "map"
       };
@@ -756,6 +800,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
     setFilters((prev) => ({ ...prev, similarityThreshold: sessionData.similarityThreshold }));
     setExecutiveSummary(sessionData.executiveSummary);
     setSelectedCommentId(null);
+    setPreviousCommentsBeforeReclustering(null); // Clear previous clustering on import
     showToast("Session state successfully restored!", "success");
   };
 
@@ -763,6 +808,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
     setComments(newComments);
     setSelectedCommentId(null);
     setExecutiveSummary(null); // Clear summary for new dataset
+    setPreviousCommentsBeforeReclustering(null); // Clear previous clustering on import
     showToast(`Loaded ${newComments.length} comments from CSV dataset!`, "success");
   };
 
@@ -771,10 +817,24 @@ Format your response using beautiful, structured Markdown. Make it professional 
       showToast("No active comments found to analyze.", "error");
       return;
     }
+    // Save current comments state to allow reverting/undoing
+    setPreviousCommentsBeforeReclustering([...comments]);
+
     const updated = clusterCommentsDynamically(comments);
     setComments(updated);
     setFilters((prev) => ({ ...prev, topics: [] })); // Clear selected topics since they are updated
-    showToast("Successfully identified and clustered authentic topics from comments!", "success");
+    showToast("Successfully identified and clustered authentic topics from comments! You can revert this if needed.", "success");
+  };
+
+  const handleRevertReclustering = () => {
+    if (!previousCommentsBeforeReclustering) {
+      showToast("No previous clustering state found to revert.", "error");
+      return;
+    }
+    setComments(previousCommentsBeforeReclustering);
+    setPreviousCommentsBeforeReclustering(null);
+    setFilters((prev) => ({ ...prev, topics: [] }));
+    showToast("Successfully reverted smart topic re-clustering to prior state.", "success");
   };
 
   const handleReloadProjectionWithQuery = (queryText: string, queryEmbedding: number[]) => {
@@ -1151,6 +1211,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
             onChangeSettings={setLlmSettings}
             onInitializeWithComments={(newComments, summary) => {
               setComments(newComments);
+              setPreviousCommentsBeforeReclustering(null);
               if (summary) setExecutiveSummary(summary);
             }}
             onStartIndexing={handleStartIndexing}
@@ -1187,12 +1248,15 @@ Format your response using beautiful, structured Markdown. Make it professional 
                 onClearFilters={() => setFilters({
                   sentiments: [],
                   topics: [],
+                  organizations: [],
                   searchQuery: "",
                   showDuplicatesOnly: false,
                   similarityThreshold: filters.similarityThreshold,
                 })}
                 isFallback={apiMode === "demo"}
                 onReclusterTopics={handleReclusterTopics}
+                onRevertReclustering={handleRevertReclustering}
+                canRevertReclustering={!!previousCommentsBeforeReclustering}
               />
             </section>
 
@@ -1201,6 +1265,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
               <section className="flex overflow-x-auto shrink-0 scrollbar-none">
                 {[
                   { id: "explore", label: "Similarity Plot", icon: Map },
+                  { id: "list", label: "Comments List", icon: List },
                   { id: "duplicates", label: "Deduplication Audit", icon: ShieldCheck },
                   { id: "query", label: "Semantic Query", icon: Sparkle },
                   { id: "report", label: "Executive Synthesis", icon: Layers },
@@ -1574,6 +1639,28 @@ Format your response using beautiful, structured Markdown. Make it professional 
                 </div>
               )}
 
+              {/* TAB 1.5: COMMENTS LIST COMPARISON VIEW */}
+              {activeTab === "list" && (
+                <CommentsList
+                  comments={comments}
+                  llmSettings={llmSettings}
+                  selectedCommentIdGlobal={selectedCommentId}
+                  onSelectCommentGlobal={setSelectedCommentId}
+                  onSaveSynthesisToHistory={(synth) => {
+                    const newHistoryItem: SavedSynthesis = {
+                      id: `perspective_${Date.now()}`,
+                      title: synth.title,
+                      markdown: synth.markdown,
+                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
+                      source: "map"
+                    };
+                    setSynthesisHistory((prev) => [newHistoryItem, ...prev]);
+                    setActiveSynthesis(newHistoryItem);
+                    setIsSynthesisModalOpen(true);
+                  }}
+                />
+              )}
+
               {/* TAB 2: VECTOR DEDUPLICATION REVIEW TABLE */}
               {activeTab === "duplicates" && (
                 <DuplicateReview
@@ -1611,6 +1698,13 @@ Format your response using beautiful, structured Markdown. Make it professional 
                   isSummarizing={isSummarizing}
                   onGenerateSummary={handleGenerateSummary}
                   apiMode={apiMode}
+                  onOpenHistory={() => {
+                    if (!activeSynthesis && synthesisHistory.length > 0) {
+                      setActiveSynthesis(synthesisHistory[0]);
+                    }
+                    setIsSynthesisModalOpen(true);
+                  }}
+                  historyCount={synthesisHistory.length}
                 />
               )}
 

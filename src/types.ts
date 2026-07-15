@@ -13,6 +13,8 @@ export interface CommentItem {
   timestamp?: string;
   csvRowIndex?: number; // 1-based index of row in CSV
   originalRowData?: Record<string, string>; // Holds all columns from the uploaded CSV
+  originalId?: string;
+  organizationName?: string;
 }
 
 export interface DuplicateGroup {
@@ -42,6 +44,7 @@ export interface DuplicatePair {
 export interface FilterState {
   sentiments: ('positive' | 'neutral' | 'negative')[];
   topics: string[];
+  organizations: string[];
   searchQuery: string;
   showDuplicatesOnly: boolean;
   similarityThreshold: number;

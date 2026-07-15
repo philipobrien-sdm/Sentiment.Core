@@ -223,6 +223,8 @@ export function generateDefaultDataset(): CommentItem[] {
   const list: CommentItem[] = [];
   let idCounter = 1;
 
+  const orgs = ["Acme Corp", "Stark Industries", "Wayne Enterprises", "Globex Corp", "Initech", "Umbrella Corp", "Hooli", "Soylent Corp", "Tyrell Corp", "Oscorp"];
+
   // 1. Generate core diverse comments from templates (repeating to build a robust volume)
   for (let i = 0; i < 3; i++) {
     for (const temp of FEEDBACK_TEMPLATES) {
@@ -233,6 +235,7 @@ export function generateDefaultDataset(): CommentItem[] {
       const tier = Math.random() > 0.4 ? (Math.random() > 0.5 ? "Enterprise" : "Professional") : "Developer Basic";
       const channel = Math.random() > 0.6 ? "Intercom Chat" : (Math.random() > 0.4 ? "Zendesk Ticket" : "App Store Review");
       const userId = `usr_${1000 + Math.floor(Math.random() * 9000)}`;
+      const orgName = Math.random() > 0.25 ? orgs[Math.floor(Math.random() * orgs.length)] : "";
 
       list.push({
         id,
@@ -245,14 +248,18 @@ export function generateDefaultDataset(): CommentItem[] {
         isArchived: false,
         timestamp,
         csvRowIndex: idCounter - 1,
+        originalId: id,
+        organizationName: orgName || undefined,
         originalRowData: {
+          "ID": id,
           "Row ID": String(idCounter - 1),
           "User ID": userId,
           "User Plan": tier,
           "Feedback Channel": channel,
           "Priority": temp.sentiment === "negative" ? "High" : "Normal",
           "Comment Text": text,
-          "Date Received": timestamp
+          "Date Received": timestamp,
+          "Organization Name": orgName
         }
       });
     }
@@ -301,6 +308,10 @@ export function generateDefaultDataset(): CommentItem[] {
     const channel = "App Store Review";
     const tier = "Developer Basic";
 
+    // Link duplicate organization to its corresponding original's organization if possible, or randomize
+    const originalNode = list.find(l => l.id === dup.originalId);
+    const orgName = originalNode?.organizationName || (Math.random() > 0.25 ? orgs[Math.floor(Math.random() * orgs.length)] : "");
+
     list.push({
       id,
       text: dup.dupText,
@@ -315,14 +326,18 @@ export function generateDefaultDataset(): CommentItem[] {
       isArchived: false,
       timestamp,
       csvRowIndex: idCounter - 1,
+      originalId: id,
+      organizationName: orgName || undefined,
       originalRowData: {
+        "ID": id,
         "Row ID": String(idCounter - 1),
         "User ID": userId,
         "User Plan": tier,
         "Feedback Channel": channel,
         "Priority": dup.sentiment === "negative" ? "High" : "Normal",
         "Comment Text": dup.dupText,
-        "Date Received": timestamp
+        "Date Received": timestamp,
+        "Organization Name": orgName
       }
     });
   }

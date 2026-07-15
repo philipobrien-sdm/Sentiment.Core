@@ -34,6 +34,8 @@ export const ImportExport: React.FC<ImportExportProps> = ({
   const [selectedTextField, setSelectedTextField] = useState<string>("");
   const [selectedSentimentField, setSelectedSentimentField] = useState<string>("");
   const [selectedTopicField, setSelectedTopicField] = useState<string>("");
+  const [selectedIdField, setSelectedIdField] = useState<string>("");
+  const [selectedOrgField, setSelectedOrgField] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -100,10 +102,20 @@ export const ImportExport: React.FC<ImportExportProps> = ({
               const lower = h.toLowerCase();
               return lower.includes("topic") || lower.includes("category") || lower.includes("theme");
             });
+            const idHeader = headers.find((h) => {
+              const lower = h.toLowerCase();
+              return lower === "id" || lower.includes("identifier") || lower.includes("comment id") || lower.includes("row id") || lower.includes("feedback id");
+            });
+            const orgHeader = headers.find((h) => {
+              const lower = h.toLowerCase();
+              return lower.includes("org") || lower.includes("company") || lower.includes("organization") || lower.includes("account");
+            });
 
             setSelectedTextField(commentHeader || headers[0]);
             setSelectedSentimentField(sentimentHeader || "");
             setSelectedTopicField(topicHeader || "");
+            setSelectedIdField(idHeader || "");
+            setSelectedOrgField(orgHeader || "");
           } else {
             setErrorMessage("The uploaded CSV file appears to be empty.");
           }
@@ -182,8 +194,12 @@ export const ImportExport: React.FC<ImportExportProps> = ({
               topic = row[selectedTopicField];
             }
 
+            const parsedId = selectedIdField && row[selectedIdField] ? String(row[selectedIdField]).trim() : "";
+            const finalId = parsedId || `csv_backup_${idx + 1}_${Math.random().toString(36).substr(2, 4)}`;
+            const orgName = selectedOrgField && row[selectedOrgField] ? String(row[selectedOrgField]).trim() : undefined;
+
             return {
-              id: `csv_backup_${idx + 1}_${Math.random().toString(36).substr(2, 4)}`,
+              id: finalId,
               text,
               sentiment,
               topic,
@@ -193,6 +209,8 @@ export const ImportExport: React.FC<ImportExportProps> = ({
               isArchived: false,
               timestamp: new Date().toISOString().split('T')[0],
               csvRowIndex: idx + 1,
+              originalId: parsedId || finalId,
+              organizationName: orgName || undefined,
               originalRowData: row
             };
           });
@@ -268,8 +286,12 @@ export const ImportExport: React.FC<ImportExportProps> = ({
           topic = row[selectedTopicField];
         }
 
+        const parsedId = selectedIdField && row[selectedIdField] ? String(row[selectedIdField]).trim() : "";
+        const finalId = parsedId || `csv_rec_${idx + 1}`;
+        const orgName = selectedOrgField && row[selectedOrgField] ? String(row[selectedOrgField]).trim() : undefined;
+
         return {
-          id: `csv_rec_${idx + 1}`,
+          id: finalId,
           text,
           sentiment,
           topic,
@@ -279,6 +301,8 @@ export const ImportExport: React.FC<ImportExportProps> = ({
           isArchived: false,
           timestamp: new Date().toISOString().split('T')[0],
           csvRowIndex: idx + 1,
+          originalId: parsedId || finalId,
+          organizationName: orgName || undefined,
           originalRowData: row
         };
       });
@@ -428,6 +452,40 @@ export const ImportExport: React.FC<ImportExportProps> = ({
                     className="w-full bg-white border border-[#E5E3DF] rounded-none px-2.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-xs"
                   >
                     <option value="">-- Let AI Classifier Group Into Clusters --</option>
+                    {csvPreview.headers.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 4. Comment ID Column Mapper */}
+                <div>
+                  <label className="font-semibold text-gray-600 block mb-1.5 uppercase tracking-wider text-[9px]">
+                    Comment ID Column (Optional, otherwise auto-generated):
+                  </label>
+                  <select
+                    value={selectedIdField}
+                    onChange={(e) => setSelectedIdField(e.target.value)}
+                    className="w-full bg-white border border-[#E5E3DF] rounded-none px-2.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-xs"
+                  >
+                    <option value="">-- Auto-generate unique IDs --</option>
+                    {csvPreview.headers.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 5. Organization Name Column Mapper */}
+                <div>
+                  <label className="font-semibold text-gray-600 block mb-1.5 uppercase tracking-wider text-[9px]">
+                    Organization Name Column (Optional, otherwise omitted):
+                  </label>
+                  <select
+                    value={selectedOrgField}
+                    onChange={(e) => setSelectedOrgField(e.target.value)}
+                    className="w-full bg-white border border-[#E5E3DF] rounded-none px-2.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-xs"
+                  >
+                    <option value="">-- None / No organization data --</option>
                     {csvPreview.headers.map((h) => (
                       <option key={h} value={h}>{h}</option>
                     ))}
