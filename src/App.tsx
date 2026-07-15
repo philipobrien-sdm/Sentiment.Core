@@ -10,6 +10,7 @@ import { ImportExport } from "./components/ImportExport";
 import { SetupLandingPage } from "./components/SetupLandingPage";
 import { SemanticQuery } from "./components/SemanticQuery";
 import { CommentsList } from "./components/CommentsList";
+import { AboutModal } from "./components/AboutModal";
 import { SynthesisModal, SavedSynthesis } from "./components/SynthesisModal";
 import { getCachedEmbedding, loadEmbeddingsIntoCache, setCachedEmbedding, getCommentEmbedding } from "./utils/embeddingsCache";
 import { 
@@ -126,6 +127,7 @@ export default function App() {
 
   // Settings Slide-over visibility
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isAboutOpen, setIsAboutOpen] = useState<boolean>(false);
 
   // Local discovered models list states
   const [availableModels, setAvailableModels] = useState<string[]>(() => {
@@ -1252,6 +1254,16 @@ Format your response using beautiful, structured Markdown. Make it professional 
             </button>
           )}
 
+          {/* About Modal Button */}
+          <button 
+            onClick={() => setIsAboutOpen(true)}
+            className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+            title="About Sentiment.Core & Embeddings"
+          >
+            <Info className="w-3.5 h-3.5 text-[#4A6741]" />
+            <span>About</span>
+          </button>
+
           {/* Slide Drawer Button */}
           <button 
             onClick={() => setIsSettingsOpen(true)}
@@ -1850,6 +1862,12 @@ Format your response using beautiful, structured Markdown. Make it professional 
           setSynthesisHistory([]);
           setActiveSynthesis(null);
         }}
+      />
+
+      {/* About & Embeddings Explainer Modal */}
+      <AboutModal
+        isOpen={isAboutOpen}
+        onClose={() => setIsAboutOpen(false)}
       />
     </div>
   );
