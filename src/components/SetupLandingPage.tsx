@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { generateDefaultDataset } from "../data/defaultComments";
 import { clusterCommentsDynamically } from "../utils/topicClustering";
+import { PromptAssistant } from "./PromptAssistant";
 
 interface SetupLandingPageProps {
   llmSettings: LlmSettings;
@@ -539,6 +540,17 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
                   Reset to Default
                 </button>
               </div>
+
+              <PromptAssistant
+                llmSettings={llmSettings}
+                onPersonaGenerated={(newPersona) => {
+                  onChangeSettings({
+                    ...llmSettings,
+                    customPersona: newPersona
+                  });
+                }}
+              />
+
               <textarea
                 value={llmSettings.customPersona || ""}
                 onChange={(e) => onChangeSettings({ ...llmSettings, customPersona: e.target.value })}

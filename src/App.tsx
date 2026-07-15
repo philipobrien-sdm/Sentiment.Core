@@ -11,6 +11,7 @@ import { SetupLandingPage } from "./components/SetupLandingPage";
 import { SemanticQuery } from "./components/SemanticQuery";
 import { CommentsList } from "./components/CommentsList";
 import { AboutModal } from "./components/AboutModal";
+import { PromptAssistant } from "./components/PromptAssistant";
 import { SynthesisModal, SavedSynthesis } from "./components/SynthesisModal";
 import { getCachedEmbedding, loadEmbeddingsIntoCache, setCachedEmbedding, getCommentEmbedding } from "./utils/embeddingsCache";
 import { 
@@ -1148,6 +1149,18 @@ Format your response using beautiful, structured Markdown. Make it professional 
                         Reset to Default
                       </button>
                     </div>
+
+                    <PromptAssistant
+                      llmSettings={llmSettings}
+                      onPersonaGenerated={(newPersona) => {
+                        setLlmSettings(prev => ({
+                          ...prev,
+                          customPersona: newPersona
+                        }));
+                      }}
+                      className="mb-2.5"
+                    />
+
                     <textarea
                       value={llmSettings.customPersona || ""}
                       onChange={(e) => setLlmSettings({ ...llmSettings, customPersona: e.target.value })}
