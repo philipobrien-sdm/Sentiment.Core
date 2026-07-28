@@ -12,6 +12,7 @@ import { SemanticQuery } from "./components/SemanticQuery";
 import { CommentsList } from "./components/CommentsList";
 import { AboutModal } from "./components/AboutModal";
 import { PromptAssistant } from "./components/PromptAssistant";
+import { CustomTopicClusterView } from "./components/CustomTopicClusterView";
 import { SynthesisModal, SavedSynthesis } from "./components/SynthesisModal";
 import { getCachedEmbedding, loadEmbeddingsIntoCache, setCachedEmbedding, getCommentEmbedding } from "./utils/embeddingsCache";
 import { 
@@ -47,7 +48,8 @@ import {
   Loader2,
   Eye,
   History,
-  List
+  List,
+  FolderKanban
 } from "lucide-react";
 
 export default function App() {
@@ -81,7 +83,7 @@ export default function App() {
   const [isAnalyzingNeighborhood, setIsAnalyzingNeighborhood] = useState<boolean>(false);
   const [neighborhoodSynthesis, setNeighborhoodSynthesis] = useState<string | null>(null);
   const [expandedOriginalRow, setExpandedOriginalRow] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'explore' | 'list' | 'duplicates' | 'report' | 'data' | 'query'>('explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'list' | 'duplicates' | 'query' | 'clusters' | 'report' | 'data'>('explore');
   const [colorMode, setColorMode] = useState<'sentiment' | 'topic'>('sentiment');
 
   // Critique Modal & History states
@@ -1354,6 +1356,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
                   { id: "list", label: "Comments List", icon: List },
                   { id: "duplicates", label: "Deduplication Audit", icon: ShieldCheck },
                   { id: "query", label: "Semantic Query", icon: Sparkle },
+                  { id: "clusters", label: "Custom Clusters", icon: FolderKanban },
                   { id: "report", label: "Executive Synthesis", icon: Layers },
                   { id: "data", label: "Manage Datasets", icon: Database },
                 ].map((tab) => {
@@ -1775,7 +1778,24 @@ Format your response using beautiful, structured Markdown. Make it professional 
                 />
               )}
 
-              {/* TAB 3: EXECUTIVE SUMMARY WRITER */}
+              {/* TAB 3: CUSTOM TOPIC EMBEDDING CLUSTERING */}
+              {activeTab === "clusters" && (
+                <CustomTopicClusterView
+                  comments={comments}
+                  llmSettings={llmSettings}
+                  onApplyTopicsToDataset={(updatedComments) => {
+                    setComments(updatedComments);
+                    setFilters((prev) => ({ ...prev, topics: [] }));
+                  }}
+                  showToast={showToast}
+                  onSelectComment={(id) => {
+                    setSelectedCommentId(id);
+                    setActiveTab("explore");
+                  }}
+                />
+              )}
+
+              {/* TAB 4: EXECUTIVE SUMMARY WRITER */}
               {activeTab === "report" && (
                 <ExecutiveReport
                   comments={comments}
