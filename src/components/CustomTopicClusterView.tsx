@@ -4,7 +4,8 @@ import {
   CheckCircle2, ArrowUpDown, Tag, Building2, Smile, Frown, Meh,
   RefreshCw, Loader2, Info, ChevronRight, Layers, FileSpreadsheet, Check
 } from "lucide-react";
-import { CommentItem, LlmSettings } from "../types";
+import { CommentItem, LlmSettings, StakeholderMapping } from "../types";
+import { OrganizationBadge } from "./OrganizationBadge";
 import { calculateCosineSimilarity } from "./DuplicateReview";
 import { fetchLocalEmbeddings, getDeterministicPseudoEmbedding } from "../utils/localLlm";
 import { getCommentEmbedding } from "../utils/embeddingsCache";
@@ -12,6 +13,8 @@ import { getCommentEmbedding } from "../utils/embeddingsCache";
 interface CustomTopicClusterViewProps {
   comments: CommentItem[];
   llmSettings: LlmSettings;
+  stakeholderMappings?: Record<string, StakeholderMapping>;
+  onOpenStakeholderModal?: (orgName?: string) => void;
   onApplyTopicsToDataset: (updatedComments: CommentItem[]) => void;
   showToast: (message: string, type: 'info' | 'success' | 'error') => void;
   onSelectComment?: (commentId: string) => void;
@@ -46,6 +49,8 @@ const DEFAULT_PRESET_TOPICS = [
 export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
   comments,
   llmSettings,
+  stakeholderMappings = {},
+  onOpenStakeholderModal,
   onApplyTopicsToDataset,
   showToast,
   onSelectComment
@@ -586,11 +591,21 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                 </div>
               </div>
 
-              {/* Card 4: Organizations Represented */}
+              {/* Card 4: Organizations Represented & Stakeholder Power Mapping */}
               <div className="bg-white border border-[#E5E3DF] p-3.5 space-y-1">
-                <span className="text-[9px] uppercase font-mono tracking-wider font-bold text-gray-400 block">
-                  Organizations Represented
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase font-mono tracking-wider font-bold text-gray-400 block">
+                    Organizations Represented
+                  </span>
+                  {onOpenStakeholderModal && (
+                    <button
+                      onClick={() => onOpenStakeholderModal()}
+                      className="text-[9px] font-mono text-[#4A6741] hover:underline font-bold"
+                    >
+                      Stakeholder Grid →
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[#1A1A1A]">
                     <Building2 className="w-4 h-4 text-gray-500" />
@@ -600,9 +615,21 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                     <span className="text-xs text-gray-500">orgs</span>
                   </div>
                   {currentGroup.organizations.length > 0 && (
-                    <span className="text-[9px] text-gray-400 font-mono truncate max-w-[120px]" title={currentGroup.organizations.join(", ")}>
-                      {currentGroup.organizations.slice(0, 2).join(", ")}{currentGroup.organizations.length > 2 ? "..." : ""}
-                    </span>
+                    <div className="flex items-center gap-1 overflow-x-auto max-w-[160px]">
+                      {currentGroup.organizations.slice(0, 2).map((org) => (
+                        <OrganizationBadge
+                          key={org}
+                          organizationName={org}
+                          mapping={stakeholderMappings[org]}
+                          onClick={onOpenStakeholderModal}
+                        />
+                      ))}
+                      {currentGroup.organizations.length > 2 && (
+                        <span className="text-[9px] text-gray-400 font-mono">
+                          +{currentGroup.organizations.length - 2}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -706,12 +733,11 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
 
                           {/* Organization Name Column */}
                           <td className="py-3.5 px-4 font-medium text-gray-700 align-top">
-                            <div className="flex items-center gap-1.5">
-                              <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                              <span className="truncate max-w-[150px]" title={orgNameDisplay}>
-                                {orgNameDisplay}
-                              </span>
-                            </div>
+                            <OrganizationBadge
+                              organizationName={orgNameDisplay}
+                              mapping={stakeholderMappings[orgNameDisplay]}
+                              onClick={onOpenStakeholderModal}
+                            />
                           </td>
 
                           {/* Comment Text Column */}

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { CommentItem, LlmSettings } from "../types";
+import { CommentItem, LlmSettings, StakeholderMapping } from "../types";
+import { OrganizationBadge } from "./OrganizationBadge";
 import { getCommentEmbedding } from "../utils/embeddingsCache";
 import { calculateCosineSimilarity } from "./DuplicateReview";
 import { fetchLocalCompletion } from "../utils/localLlm";
@@ -14,6 +15,8 @@ import { MarkdownViewer } from "./MarkdownViewer";
 interface CommentsListProps {
   comments: CommentItem[];
   llmSettings: LlmSettings;
+  stakeholderMappings?: Record<string, StakeholderMapping>;
+  onOpenStakeholderModal?: (orgName?: string) => void;
   onSelectCommentGlobal?: (id: string | null) => void;
   selectedCommentIdGlobal?: string | null;
   onSaveSynthesisToHistory?: (synthesis: { title: string; markdown: string; source: string }) => void;
@@ -60,6 +63,8 @@ ${negatives.slice(0, 3).map(n => `- *"Row ${n.csvRowIndex || "?"} (${n.organizat
 export const CommentsList: React.FC<CommentsListProps> = ({
   comments,
   llmSettings,
+  stakeholderMappings = {},
+  onOpenStakeholderModal,
   onSelectCommentGlobal,
   selectedCommentIdGlobal,
   onSaveSynthesisToHistory,
@@ -375,10 +380,11 @@ Please write a gorgeous, highly precise, professional viewpoint synthesis in cle
                       {c.topic || "General"}
                     </span>
                     {c.organizationName && (
-                      <span className="flex items-center gap-1">
-                        <Building className="w-3 h-3 opacity-70" />
-                        {c.organizationName}
-                      </span>
+                      <OrganizationBadge
+                        organizationName={c.organizationName}
+                        mapping={stakeholderMappings[c.organizationName]}
+                        onClick={onOpenStakeholderModal}
+                      />
                     )}
                   </div>
                 </button>
@@ -443,10 +449,18 @@ Please write a gorgeous, highly precise, professional viewpoint synthesis in cle
                   <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
                   <strong>Topic Cluster:</strong> {selectedComment.topic || "General"}
                 </span>
-                <span className="flex items-center gap-1">
-                  <Building className="w-3.5 h-3.5 text-gray-400" />
-                  <strong>Organization:</strong> {selectedComment.organizationName || "*(No Organization Data)*"}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <strong className="text-gray-700">Organization:</strong>
+                  {selectedComment.organizationName ? (
+                    <OrganizationBadge
+                      organizationName={selectedComment.organizationName}
+                      mapping={stakeholderMappings[selectedComment.organizationName]}
+                      onClick={onOpenStakeholderModal}
+                    />
+                  ) : (
+                    <span className="text-gray-400 italic">*(No Organization Data)*</span>
+                  )}
+                </div>
                 <span className="flex items-center gap-1">
                   <ThumbsUp className="w-3.5 h-3.5 text-gray-400" />
                   <strong>Focal Sentiment:</strong> 

@@ -253,7 +253,10 @@ export async function fetchLocalCompletion(
 }
 
 // Generates a highly detailed, dynamically tailored report based on actual dataset statistics
-export function generateLocalHeuristicSummary(comments: { text: string; sentiment: string; topic: string; isDuplicate?: boolean }[]): string {
+export function generateLocalHeuristicSummary(
+  comments: { text: string; sentiment: string; topic: string; organizationName?: string; isDuplicate?: boolean }[],
+  stakeholderMappings: Record<string, { interest: number; influence: number; quadrant: string; notes?: string }> = {}
+): string {
   const total = comments.length;
   if (total === 0) {
     return "### Executive Feedback Analysis Report\n\nNo active comments found in the current viewport dataset to analyze. Please upload a CSV dataset or restore a session.";
@@ -281,14 +284,36 @@ export function generateLocalHeuristicSummary(comments: { text: string; sentimen
   let topicSummaryStr = "";
   sortedTopics.forEach(([topic, count]) => {
     const topicRatio = ((count / total) * 100).toFixed(0);
-    topicSummaryStr += `- **${topic}** represents **${count} comments** (${topicRatio}% of the dataset). Sentiment on this cluster leans heavily towards issues that require targeted action.\n`;
+    topicSummaryStr += `- **${topic}** represents **${count} comments** (${topicRatio}% of dataset). Sentiment on this cluster requires targeted action.\n`;
   });
+
+  // Analyze Stakeholder Quadrants
+  const mappedOrgs = Object.keys(stakeholderMappings);
+  const keyPlayerOrgs = mappedOrgs.filter(org => {
+    const m = stakeholderMappings[org];
+    return m.influence >= 3.0 && m.interest >= 3.0;
+  });
+
+  const keyPlayerComments = comments.filter(c => c.organizationName && keyPlayerOrgs.includes(c.organizationName));
+
+  let stakeholderMatrixStr = "";
+  if (keyPlayerOrgs.length > 0) {
+    stakeholderMatrixStr = `### 👑 High-Priority Stakeholder Synthesis (Key Players)
+- **High Influence & Interest Organizations**: ${keyPlayerOrgs.map(o => `**${o}**`).join(", ")}
+- **Key Player Comment Volume**: **${keyPlayerComments.length} feedback items** originate from high-power, high-interest decision makers.
+- **Prioritized Strategic Directive**: Feedback from ${keyPlayerOrgs.slice(0, 3).join(", ")} must be prioritized first in review evaluations to maintain key stakeholder alignment and satisfaction.`;
+  } else {
+    stakeholderMatrixStr = `### 👑 Stakeholder Power-Interest Matrix
+- **Status**: ${mappedOrgs.length > 0 ? `${mappedOrgs.length} organizations mapped on 2D matrix.` : "No organizations custom-mapped yet."} Click any Organization name in the dataset to define Interest (1-5) and Influence (1-5) scores for weighted evaluation.`;
+  }
 
   return `# Executive Feedback Analysis Report
 *Heuristic dataset compilation of ${total} active comments*
 
 ## Executive Summary
-This report analyzes user stakeholder feedback across the loaded workspace. Overall sentiment is distributed across positive (${positiveRatio}%), neutral (${neutralRatio}%), and negative (${negativeRatio}%) channels. A total of **${duplicates} redundant comment groupings** were detected and audited.
+This report analyzes user stakeholder feedback across the loaded workspace. Overall sentiment is distributed across positive (${positiveRatio}%), neutral (${neutralRatio}%), and negative (${negativeRatio}%) channels. A total of **${duplicates} redundant comment groupings** were audited.
+
+${stakeholderMatrixStr}
 
 ## Core Recurring Themes & Topics
 ${topicSummaryStr || "- No dominant topic clusters identified."}
@@ -298,9 +323,9 @@ ${topicSummaryStr || "- No dominant topic clusters identified."}
 - **Detractors & Friction Blocks**: Negative sentiment centers around speed barriers, crashes, and repeating layout glitches.
 
 ## Recommended Strategic Steps
-1. **Target Highest Volume Cluster**: Focus product planning on issues identified under the **${sortedTopics[0]?.[0] || "primary"}** category, as it contains the largest share of stakeholder friction.
-2. **Execute Deduplication Audits**: Archive the **${duplicates} flagged duplicate entries** to clean the dataset noise and isolate unique customer voices.
-3. **Verify API Configuration**: Connect a local LLM runner (e.g. Ollama or LM Studio) to upgrade this heuristic report into deep semantic synthesis.`;
+1. **Prioritize Key Player Feedback**: Focus immediate resolution efforts on feedback submitted by **${keyPlayerOrgs[0] || "high-influence organizations"}** to prevent opposition and secure executive consensus.
+2. **Target Highest Volume Cluster**: Focus product planning on issues identified under **${sortedTopics[0]?.[0] || "primary cluster"}**.
+3. **Execute Deduplication Audits**: Archive the **${duplicates} flagged duplicate entries** to clean dataset noise.`;
 }
 
 // Fetch available models from user-configured local OpenAI-compatible endpoint

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { CommentItem, FilterState, LlmSettings } from "./types";
+import { CommentItem, FilterState, LlmSettings, StakeholderMapping, getQuadrantInfo } from "./types";
 import { generateDefaultDataset } from "./data/defaultComments";
 import { clusterCommentsDynamically } from "./utils/topicClustering";
 import { VectorPlot } from "./components/VectorPlot";
@@ -14,6 +14,8 @@ import { AboutModal } from "./components/AboutModal";
 import { PromptAssistant } from "./components/PromptAssistant";
 import { CustomTopicClusterView } from "./components/CustomTopicClusterView";
 import { SynthesisModal, SavedSynthesis } from "./components/SynthesisModal";
+import { StakeholderMappingModal } from "./components/StakeholderMappingModal";
+import { OrganizationBadge } from "./components/OrganizationBadge";
 import { getCachedEmbedding, loadEmbeddingsIntoCache, setCachedEmbedding, getCommentEmbedding } from "./utils/embeddingsCache";
 import { 
   fetchLocalEmbeddings, 
@@ -131,6 +133,42 @@ export default function App() {
   // Settings Slide-over visibility
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isAboutOpen, setIsAboutOpen] = useState<boolean>(false);
+
+  // Stakeholder Power-Interest Mappings state
+  const [stakeholderMappings, setStakeholderMappings] = useState<Record<string, StakeholderMapping>>(() => {
+    const saved = localStorage.getItem("stakeholder_mappings");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object") return parsed;
+      } catch (e) {}
+    }
+    return {};
+  });
+
+  const [isStakeholderModalOpen, setIsStakeholderModalOpen] = useState<boolean>(false);
+  const [stakeholderModalTargetOrg, setStakeholderModalTargetOrg] = useState<string | null>(null);
+
+  // Persist stakeholder mappings to localStorage
+  useEffect(() => {
+    localStorage.setItem("stakeholder_mappings", JSON.stringify(stakeholderMappings));
+  }, [stakeholderMappings]);
+
+  const handleOpenStakeholderModal = (orgName?: string) => {
+    setStakeholderModalTargetOrg(orgName || null);
+    setIsStakeholderModalOpen(true);
+  };
+
+  const handleSaveStakeholderMapping = (mapping: StakeholderMapping) => {
+    setStakeholderMappings((prev) => ({
+      ...prev,
+      [mapping.organizationName]: mapping,
+    }));
+  };
+
+  const handleSaveAllStakeholderMappings = (mappings: Record<string, StakeholderMapping>) => {
+    setStakeholderMappings(mappings);
+  };
 
   // Local discovered models list states
   const [availableModels, setAvailableModels] = useState<string[]>(() => {
@@ -464,20 +502,48 @@ export default function App() {
 
     try {
       let summaryText = "";
-      const nodesUsed = filteredComments.slice(0, 80);
+      
+      // Calculate stakeholder priority weight for each comment
+      const getCommentPriorityWeight = (c: CommentItem) => {
+        const org = c.organizationName || c.originalRowData?.["Organization"] || c.originalRowData?.["Org"] || c.originalRowData?.["Organization Name"];
+        if (org && stakeholderMappings[org]) {
+          const m = stakeholderMappings[org];
+          const qInfo = getQuadrantInfo(m.influence, m.interest);
+          return qInfo.priorityWeight;
+        }
+        return 1.0;
+      };
+
+      // Sort comments by stakeholder priority weight descending (Key Players / High Power & Interest first!)
+      const prioritizedComments = [...filteredComments].sort((a, b) => getCommentPriorityWeight(b) - getCommentWeight(a));
+      function getCommentWeight(c: CommentItem) {
+        return getCommentPriorityWeight(c);
+      }
+
+      const nodesUsed = prioritizedComments.slice(0, 80);
       
       const structuredPrompt = `You are a Principal Customer Experience & Data Analyst.
 Analyze the following stakeholder comments collected from an update or product release.
 Provide an executive synthesis summarizing stakeholder sentiment, core themes, recurring pain points, and action items.
 
-Comments Dataset:
-${nodesUsed.map((c, i) => `[Comment ${i+1}] Topic: "${c.topic}", Sentiment: "${c.sentiment}"\nText: "${c.text}"`).join("\n---\n")}
+STAKEHOLDER POWER-INTEREST PRIORITIZATION GUIDELINES:
+- Organizations have been classified along Influence (Power) and Interest axes.
+- Key Players (High Influence & High Interest, 2.5x Priority Weight) MUST be given top strategic priority.
+- Explicitly highlight key feedback, friction, or requirements raised by Key Players and High Influence organizations, as their satisfaction is critical for review approval.
+
+Comments Dataset (Sorted by Stakeholder Power & Interest Priority):
+${nodesUsed.map((c, i) => {
+  const org = c.organizationName || c.originalRowData?.["Organization"] || c.originalRowData?.["Org"] || "Unspecified Org";
+  const m = stakeholderMappings[org];
+  const qLabel = m ? getQuadrantInfo(m.influence, m.interest).label : "Unmapped (1.0x Weight)";
+  return `[Comment ${i+1}] Org: "${org}" (${qLabel}) | Topic: "${c.topic}" | Sentiment: "${c.sentiment}"\nText: "${c.text}"`;
+}).join("\n---\n")}
 
 Format the response using beautiful, professional Markdown including:
 1. **Executive Summary**: A concise paragraph of the overall stakeholder mood.
-2. **Top Recurring Issues**: Key complaints/bugs requiring immediate attention.
-3. **Core Common Themes**: Primary positive or request clusters.
-4. **Strategic Action Plan**: 3 clear bullet points on how to resolve the issues.`;
+2. **Key Player & High Power Stakeholder Priorities**: Highlight specific feedback, friction, or alignment from top-tier organizations.
+3. **Top Recurring Issues & Common Themes**: Key complaints/bugs and positive request clusters.
+4. **Strategic Action Plan**: 3 clear bullet points on how to resolve the issues, prioritizing Key Player demands.`;
 
       try {
         summaryText = await fetchLocalCompletion(structuredPrompt, llmSettings);
@@ -485,7 +551,7 @@ Format the response using beautiful, professional Markdown including:
       } catch (innerErr: any) {
         console.warn("Local model connection failed. Creating tailored heuristic report.", innerErr);
         showToast("Local server offline/CORS blocked. Compiled dynamic analysis.", "info");
-        summaryText = generateLocalHeuristicSummary(filteredComments);
+        summaryText = generateLocalHeuristicSummary(filteredComments, stakeholderMappings);
       }
 
       const tracedText = summaryText + generateTraceabilitySection(nodesUsed);
@@ -1269,6 +1335,18 @@ Format your response using beautiful, structured Markdown. Make it professional 
             </button>
           )}
 
+          {/* Stakeholder Matrix Button */}
+          {isInitialized && (
+            <button 
+              onClick={() => handleOpenStakeholderModal()}
+              className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#4A6741] hover:bg-emerald-50 text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+              title="Open Stakeholder Power-Interest Matrix Modal"
+            >
+              <FolderKanban className="w-3.5 h-3.5 text-[#4A6741]" />
+              <span>Stakeholder Grid</span>
+            </button>
+          )}
+
           {/* About Modal Button */}
           <button 
             onClick={() => setIsAboutOpen(true)}
@@ -1614,6 +1692,16 @@ Format your response using beautiful, structured Markdown. Make it professional 
                             </div>
                           )}
 
+                          {/* Organization badge with stakeholder power-interest mapping trigger */}
+                          <div>
+                            <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Organization Stakeholder</label>
+                            <OrganizationBadge
+                              organizationName={selectedComment.organizationName || selectedComment.originalRowData?.["Organization"] || selectedComment.originalRowData?.["Org"]}
+                              mapping={stakeholderMappings[selectedComment.organizationName || selectedComment.originalRowData?.["Organization"] || selectedComment.originalRowData?.["Org"] || ""]}
+                              onClick={() => handleOpenStakeholderModal(selectedComment.organizationName || selectedComment.originalRowData?.["Organization"] || selectedComment.originalRowData?.["Org"])}
+                            />
+                          </div>
+
                           {/* Meta modifier selectors */}
                           <div className="grid grid-cols-2 gap-4 text-xs">
                             <div>
@@ -1732,6 +1820,8 @@ Format your response using beautiful, structured Markdown. Make it professional 
                 <CommentsList
                   comments={comments}
                   llmSettings={llmSettings}
+                  stakeholderMappings={stakeholderMappings}
+                  onOpenStakeholderModal={handleOpenStakeholderModal}
                   selectedCommentIdGlobal={selectedCommentId}
                   onSelectCommentGlobal={setSelectedCommentId}
                   onSaveSynthesisToHistory={(synth) => {
@@ -1783,6 +1873,8 @@ Format your response using beautiful, structured Markdown. Make it professional 
                 <CustomTopicClusterView
                   comments={comments}
                   llmSettings={llmSettings}
+                  stakeholderMappings={stakeholderMappings}
+                  onOpenStakeholderModal={handleOpenStakeholderModal}
                   onApplyTopicsToDataset={(updatedComments) => {
                     setComments(updatedComments);
                     setFilters((prev) => ({ ...prev, topics: [] }));
@@ -1901,6 +1993,18 @@ Format your response using beautiful, structured Markdown. Make it professional 
       <AboutModal
         isOpen={isAboutOpen}
         onClose={() => setIsAboutOpen(false)}
+      />
+
+      {/* Stakeholder Power-Interest Matrix Mapping Modal */}
+      <StakeholderMappingModal
+        isOpen={isStakeholderModalOpen}
+        onClose={() => setIsStakeholderModalOpen(false)}
+        initialOrganizationName={stakeholderModalTargetOrg}
+        comments={comments}
+        stakeholderMappings={stakeholderMappings}
+        onSaveMapping={handleSaveStakeholderMapping}
+        onSaveAllMappings={handleSaveAllStakeholderMappings}
+        showToast={showToast}
       />
     </div>
   );

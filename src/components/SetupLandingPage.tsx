@@ -58,6 +58,52 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [fileContext, setFileContext] = useState<string>(llmSettings.datasetContext || "");
+
+  const PRESET_CONTEXTS = [
+    {
+      icon: "🏛️",
+      label: "Public Policy & Zoning",
+      context: "Public consultation feedback regarding municipal zoning ordinances, transit expansion, and urban development plans."
+    },
+    {
+      icon: "📱",
+      label: "Product & SaaS",
+      context: "Customer feedback and app store reviews for a SaaS product release, focusing on usability, performance, and feature requests."
+    },
+    {
+      icon: "💼",
+      label: "Employee Survey",
+      context: "Internal employee engagement survey responses evaluating organizational culture, leadership communication, and workplace policies."
+    },
+    {
+      icon: "🏥",
+      label: "Healthcare & Clinical",
+      context: "Patient and medical staff feedback evaluating clinical care quality, appointment scheduling, and facility services."
+    },
+    {
+      icon: "🎓",
+      label: "Higher Education",
+      context: "Student and faculty comments regarding university curriculum, campus housing, and student support services."
+    }
+  ];
+
+  const updatePersonaFromContext = (contextText: string) => {
+    const trimmed = contextText.trim();
+    let generatedPersona = "";
+    if (!trimmed) {
+      generatedPersona = "You are a Senior Strategic Product & Customer Experience Analyst. Focus heavily on stakeholder sentiment, correctly infer user intent from context, and reconcile opposing friction points while maintaining complete factual integrity with zero hallucinations.";
+    } else {
+      const upperCtx = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+      generatedPersona = `You are an expert Senior Strategic Specialist analyzing stakeholder feedback for the following project context: "${upperCtx}". Focus heavily on stakeholder sentiment in this domain, correctly infer user intent from context, reconcile opposing friction points, and isolate core recurring trends while maintaining complete factual integrity with zero hallucinations.`;
+    }
+
+    onChangeSettings({
+      ...llmSettings,
+      datasetContext: trimmed,
+      customPersona: generatedPersona
+    });
+  };
 
   // Drag-and-drop support
   const handleDrag = (e: React.DragEvent) => {
@@ -164,6 +210,10 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
 
   const handleApplyCSVMapping = async () => {
     if (!csvPreview || !selectedTextField) return;
+
+    if (fileContext && fileContext.trim()) {
+      updatePersonaFromContext(fileContext);
+    }
 
     try {
       const texts = csvPreview.rows.map((row) => row[selectedTextField]?.toString() || "");
@@ -344,6 +394,9 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
   };
 
   const handleQuickStart = () => {
+    if (fileContext && fileContext.trim()) {
+      updatePersonaFromContext(fileContext);
+    }
     onInitializeWithComments(generateDefaultDataset());
   };
 
@@ -532,6 +585,7 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
                   onClick={() => {
                     onChangeSettings({
                       ...llmSettings,
+                      datasetContext: "",
                       customPersona: "You are a Senior Strategic Product & Customer Experience Analyst. Focus heavily on stakeholder sentiment, correctly infer user intent from context, and reconcile opposing friction points while maintaining complete factual integrity with zero hallucinations."
                     });
                   }}
@@ -540,6 +594,26 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
                   Reset to Default
                 </button>
               </div>
+
+              {llmSettings.datasetContext && (
+                <div className="p-2 bg-[#4A6741]/10 border border-[#4A6741]/20 text-[10px] space-y-1">
+                  <div className="flex items-center justify-between font-bold text-[#4A6741] uppercase tracking-wider text-[9px]">
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" /> Active File Context
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => updatePersonaFromContext(llmSettings.datasetContext || "")}
+                      className="hover:underline cursor-pointer"
+                    >
+                      Re-calibrate
+                    </button>
+                  </div>
+                  <p className="text-gray-700 italic font-serif text-xs leading-snug">
+                    "{llmSettings.datasetContext}"
+                  </p>
+                </div>
+              )}
 
               <PromptAssistant
                 llmSettings={llmSettings}
@@ -572,6 +646,45 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
               <Upload className="w-4 h-4 text-[#1A1A1A]" />
               <h2 className="font-serif italic text-lg text-[#1A1A1A]">2. Load Stakeholder Data</h2>
             </div>
+
+            {/* Initial Context for File before upload */}
+            {!csvPreview && (
+              <div className="p-3 bg-[#4A6741]/5 border border-[#4A6741]/20 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-[#4A6741] font-mono flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#4A6741]" />
+                    Initial File Context & Purpose
+                  </label>
+                  <span className="text-[9px] text-[#4A6741] font-mono font-semibold">Calibrates AI Persona</span>
+                </div>
+                <input
+                  type="text"
+                  value={fileContext}
+                  onChange={(e) => {
+                    setFileContext(e.target.value);
+                    updatePersonaFromContext(e.target.value);
+                  }}
+                  placeholder="e.g. Public stakeholder feedback on 2026 Downtown Mobility Master Plan..."
+                  className="w-full bg-white border border-[#E5E3DF] px-3 py-2 text-xs focus:outline-none focus:border-[#4A6741] rounded-none"
+                />
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <span className="text-[9px] text-gray-400 font-mono self-center mr-1">Domain Presets:</span>
+                  {PRESET_CONTEXTS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setFileContext(preset.context);
+                        updatePersonaFromContext(preset.context);
+                      }}
+                      className="px-2 py-0.5 bg-white hover:bg-emerald-50 border border-gray-200 hover:border-[#4A6741] text-[9px] text-gray-700 cursor-pointer transition-all"
+                    >
+                      {preset.icon} {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Drag & Drop Frame */}
             {!csvPreview && (
@@ -615,11 +728,77 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
               <div className="space-y-4 p-4 bg-[#F9F8F6] border border-[#E5E3DF] animate-in fade-in duration-200">
                 <div className="flex items-center justify-between border-b border-[#E5E3DF] pb-2">
                   <span className="text-xs font-bold text-[#1A1A1A] flex items-center gap-1.5">
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-[#4A6741]" /> Configure CSV Columns
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-[#4A6741]" /> Configure CSV Dataset & AI Persona
                   </span>
                   <span className="text-[9px] bg-white border border-[#E5E3DF] text-gray-500 px-2 py-0.5 font-mono">
                     {csvPreview.rows.length} rows
                   </span>
+                </div>
+
+                {/* File Context & AI Persona Setup Box */}
+                <div className="p-3 bg-[#4A6741]/5 border border-[#4A6741]/30 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#1A1A1A] flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#4A6741]" /> Initial Context for CSV File
+                    </span>
+                    <span className="text-[9px] bg-[#4A6741] text-white px-2 py-0.5 font-mono font-bold uppercase tracking-wider">
+                      Live Persona Sync
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-600 leading-relaxed font-sans">
+                    Specify the initial background or domain purpose for this file. This context will directly calibrate the AI's persona prompt for tailored executive synthesis.
+                  </p>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">
+                      File Context / Domain Purpose
+                    </label>
+                    <textarea
+                      value={fileContext}
+                      onChange={(e) => {
+                        setFileContext(e.target.value);
+                        updatePersonaFromContext(e.target.value);
+                      }}
+                      placeholder="e.g. Public stakeholder consultation comments regarding the 2026 Downtown Zoning Ordinance and Transit Expansion..."
+                      rows={2}
+                      className="w-full bg-white border border-[#E5E3DF] p-2 text-xs focus:outline-none focus:border-[#4A6741] resize-none rounded-none font-sans"
+                    />
+                  </div>
+
+                  {/* Domain Presets */}
+                  <div className="flex flex-wrap gap-1">
+                    <span className="text-[9px] text-gray-400 font-mono self-center mr-1">Quick Presets:</span>
+                    {PRESET_CONTEXTS.map((p) => (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => {
+                          setFileContext(p.context);
+                          updatePersonaFromContext(p.context);
+                        }}
+                        className="px-2 py-0.5 bg-white hover:bg-emerald-50 border border-gray-200 hover:border-[#4A6741] text-[9px] text-gray-700 transition-all cursor-pointer"
+                      >
+                        {p.icon} {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Persona System Prompt Preview */}
+                  <div className="pt-2 border-t border-[#4A6741]/20 space-y-1">
+                    <div className="flex items-center justify-between text-[9px] font-mono font-bold text-gray-500 uppercase tracking-wider">
+                      <span>Calibrated AI System Persona Prompt:</span>
+                      <button
+                        type="button"
+                        onClick={() => updatePersonaFromContext(fileContext)}
+                        className="text-[#4A6741] hover:underline cursor-pointer flex items-center gap-1 font-bold"
+                      >
+                        <RefreshCcw className="w-2.5 h-2.5" /> Re-sync Persona
+                      </button>
+                    </div>
+                    <div className="p-2 bg-white border border-gray-200 text-[11px] font-mono text-gray-800 leading-snug max-h-24 overflow-y-auto border-l-2 border-l-[#4A6741]">
+                      {llmSettings.customPersona || "No custom persona configured."}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-3 text-xs">
