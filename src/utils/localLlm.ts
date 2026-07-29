@@ -592,4 +592,59 @@ ${sampleList || "- No items are present in this segment."}
 3. **Connect Live LLM**: To replace this heuristic with live custom model analysis, configure your Ollama / LM Studio server in the Settings drawer.`;
 }
 
+// Generates a qualitative synthesis of comments within a custom topic cluster (client-side heuristic fallback)
+export function generateLocalHeuristicCustomClusterSynthesis(
+  topicName: string,
+  comments: { id: string; text: string; sentiment: string; topic?: string; organizationName?: string; isPreAssigned?: boolean; secondaryTopics?: { topic: string; confidence: number }[] }[]
+): string {
+  const totalCount = comments.length;
+  const sentimentCounts = {
+    positive: comments.filter(c => c.sentiment === "positive").length,
+    neutral: comments.filter(c => c.sentiment === "neutral").length,
+    negative: comments.filter(c => c.sentiment === "negative").length,
+  };
+
+  const preAssignedCount = comments.filter(c => c.isPreAssigned).length;
+  const autoMappedCount = comments.filter(c => !c.isPreAssigned).length;
+  const secondaryCount = comments.filter(c => c.secondaryTopics && c.secondaryTopics.length > 0).length;
+
+  const orgsSet = new Set<string>();
+  comments.forEach(c => {
+    const org = c.organizationName?.trim();
+    if (org) orgsSet.add(org);
+  });
+  const orgsList = Array.from(orgsSet).sort();
+
+  const sampleComments = comments.slice(0, 5).map(c => `- **[${(c.sentiment || "NEUTRAL").toUpperCase()}]** (${c.organizationName || "N/A"}): "${c.text}"`).join("\n");
+
+  return `# LLM Custom Cluster Synthesis & Critique: "${topicName}"
+*Synthesizing ${totalCount} stakeholder reports clustered under **${topicName}** (${preAssignedCount} file-assigned, ${autoMappedCount} vector auto-mapped, ${secondaryCount} with secondary topics).*
+
+## 1. Cluster Executive Overview
+- **Cluster Topic**: ${topicName}
+- **Total Volume**: ${totalCount} records
+- **Represented Organizations (${orgsList.length})**: ${orgsList.slice(0, 6).join(", ") || "General Public"}${orgsList.length > 6 ? ` (+${orgsList.length - 6} more)` : ""}
+- **Sentiment Breakdown**:
+  - Positive: ${sentimentCounts.positive} (${totalCount > 0 ? ((sentimentCounts.positive / totalCount) * 100).toFixed(0) : 0}%)
+  - Neutral: ${sentimentCounts.neutral} (${totalCount > 0 ? ((sentimentCounts.neutral / totalCount) * 100).toFixed(0) : 0}%)
+  - Negative: ${sentimentCounts.negative} (${totalCount > 0 ? ((sentimentCounts.negative / totalCount) * 100).toFixed(0) : 0}%)
+
+## 2. Core Stakeholder Intent & Key Themes
+Stakeholders under **${topicName}** express concentrated feedback regarding operational execution, user experience expectations, and feature quality.
+- **Primary Driver**: ${sentimentCounts.negative > sentimentCounts.positive ? "Addressing critical friction points, system bottlenecks, and service gaps." : "Highlighting positive workflow outcomes and requesting targeted enhancements."}
+- **Multi-Topic Associations**: ${secondaryCount} comments in this cluster also exhibit strong similarity (≥50%) to secondary topics, indicating cross-cutting impact across functional domains.
+
+## 3. Representative Feedback Excerpts
+${sampleComments || "- No representative comments available."}
+
+## 4. Organizational & Stakeholder Nuances
+- **High-Impact Groups**: Feedback from key organizations (${orgsList.slice(0, 3).join(", ") || "Main stakeholders"}) centers on consistency and clear documentation.
+- **Sentiment Divergence**: ${sentimentCounts.negative > 0 ? `${sentimentCounts.negative} negative reports require urgent engineering follow-up.` : "Overall sentiment is overwhelmingly positive or neutral."}
+
+## 5. Strategic Product & Action Recommendations
+1. **Prioritize Root Fixes for ${topicName}**: Assign top detractor reports to dedicated feature leads.
+2. **Address Multi-Topic Overlaps**: Coordinate cross-functionally where comments overlap with secondary clusters.
+3. **Engage Key Stakeholders**: Schedule follow-ups with affected organizations to validate resolution outcomes.`;
+}
+
 

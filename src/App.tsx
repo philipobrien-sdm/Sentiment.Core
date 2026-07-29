@@ -1884,6 +1884,18 @@ Format your response using beautiful, structured Markdown. Make it professional 
                     setSelectedCommentId(id);
                     setActiveTab("explore");
                   }}
+                  onSaveSynthesisToHistory={(synth) => {
+                    const newHistoryItem: SavedSynthesis = {
+                      id: `synth_${Date.now()}`,
+                      title: synth.title,
+                      markdown: synth.markdown,
+                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
+                      source: synth.source
+                    };
+                    setSynthesisHistory((prev) => [newHistoryItem, ...prev]);
+                    setActiveSynthesis(newHistoryItem);
+                    setIsSynthesisModalOpen(true);
+                  }}
                 />
               )}
 
