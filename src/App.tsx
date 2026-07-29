@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { CommentItem, FilterState, LlmSettings, StakeholderMapping, getQuadrantInfo } from "./types";
+import { CommentItem, FilterState, LlmSettings, StakeholderMapping, getQuadrantInfo, DocumentSection } from "./types";
 import { generateDefaultDataset } from "./data/defaultComments";
 import { clusterCommentsDynamically } from "./utils/topicClustering";
 import { VectorPlot } from "./components/VectorPlot";
@@ -11,6 +11,8 @@ import { SetupLandingPage } from "./components/SetupLandingPage";
 import { SemanticQuery } from "./components/SemanticQuery";
 import { CommentsList } from "./components/CommentsList";
 import { AboutModal } from "./components/AboutModal";
+import { DocumentContextModal } from "./components/DocumentContextModal";
+import { buildDocumentContextPromptBlock, syncDocumentSectionsWithComments } from "./utils/documentContext";
 import { PromptAssistant } from "./components/PromptAssistant";
 import { CustomTopicClusterView } from "./components/CustomTopicClusterView";
 import { SynthesisModal, SavedSynthesis } from "./components/SynthesisModal";
@@ -53,7 +55,8 @@ import {
   Eye,
   History,
   List,
-  FolderKanban
+  FolderKanban,
+  BookOpen
 } from "lucide-react";
 
 export default function App() {
@@ -109,6 +112,28 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("synthesis_history", JSON.stringify(synthesisHistory));
   }, [synthesisHistory]);
+
+  // Document Context Store & Modal State
+  const [documentSections, setDocumentSections] = useState<DocumentSection[]>(() => {
+    const saved = localStorage.getItem("document_sections");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [];
+  });
+  const [isDocumentContextModalOpen, setIsDocumentContextModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    localStorage.setItem("document_sections", JSON.stringify(documentSections));
+  }, [documentSections]);
+
+  useEffect(() => {
+    if (comments.length > 0) {
+      setDocumentSections((prev) => syncDocumentSectionsWithComments(comments, prev));
+    }
+  }, [comments]);
   
   // Local LLM Settings
   const [llmSettings, setLlmSettings] = useState<LlmSettings>(() => {
@@ -524,6 +549,7 @@ export default function App() {
       }
 
       const nodesUsed = prioritizedComments.slice(0, 80);
+      const docContextBlock = buildDocumentContextPromptBlock(nodesUsed, documentSections);
       
       const structuredPrompt = `You are a Principal Customer Experience & Data Analyst.
 Analyze the following stakeholder comments collected from an update or product release.
@@ -533,13 +559,14 @@ STAKEHOLDER POWER-INTEREST PRIORITIZATION GUIDELINES:
 - Organizations have been classified along Influence (Power) and Interest axes.
 - Key Players (High Influence & High Interest, 2.5x Priority Weight) MUST be given top strategic priority.
 - Explicitly highlight key feedback, friction, or requirements raised by Key Players and High Influence organizations, as their satisfaction is critical for review approval.
-
+${docContextBlock}
 Comments Dataset (Sorted by Stakeholder Power & Interest Priority):
 ${nodesUsed.map((c, i) => {
   const org = c.organizationName || c.originalRowData?.["Organization"] || c.originalRowData?.["Org"] || "Unspecified Org";
   const m = stakeholderMappings[org];
   const qLabel = m ? getQuadrantInfo(m.influence, m.interest).label : "Unmapped (1.0x Weight)";
-  return `[Comment ${i+1}] Org: "${org}" (${qLabel}) | Topic: "${c.topic}" | Sentiment: "${c.sentiment}"\nText: "${c.text}"`;
+  const refText = c.documentReference ? ` | Ref: "${c.documentReference}"` : "";
+  return `[Comment ${i+1}] Org: "${org}" (${qLabel}) | Topic: "${c.topic}" | Sentiment: "${c.sentiment}"${refText}\nText: "${c.text}"`;
 }).join("\n---\n")}
 
 Format the response using beautiful, professional Markdown including:
@@ -572,17 +599,21 @@ Format the response using beautiful, professional Markdown including:
     setIsAnalyzingNeighborhood(true);
     showToast(`Requesting LLM review for comment and adjacent neighborhood...`, "info");
     
+    const neighborhoodNodes = [selectedComment, ...similarToSelected.map((r) => r.comment)];
+    const docContextBlock = buildDocumentContextPromptBlock(neighborhoodNodes, documentSections);
+
     const structuredPrompt = `You are a Senior Strategic Customer Experience & Data Analyst.
 Analyze the following primary customer comment along with its closest semantic neighbors.
 Provide a critical, objective review summarizing what stakeholders in this subset are saying, their underlying intent/problems, and any specific action recommendations.
-
+${docContextBlock}
 Selected Primary Comment (ID: ${selectedComment.id}):
 Text: "${selectedComment.text}"
 Topic: "${selectedComment.topic}"
 Sentiment: "${selectedComment.sentiment}"
+${selectedComment.documentReference ? `Document Reference: "${selectedComment.documentReference}"` : ""}
 
 Nearest Semantic Neighbors:
-${similarToSelected.map((res, i) => `[Neighbor ${i+1}] (Similarity Match: ${(res.similarity * 100).toFixed(0)}%) Text: "${res.comment.text}" (Topic: "${res.comment.topic}", Sentiment: "${res.comment.sentiment}")`).join("\n")}
+${similarToSelected.map((res, i) => `[Neighbor ${i+1}] (Similarity Match: ${(res.similarity * 100).toFixed(0)}%) Text: "${res.comment.text}" (Topic: "${res.comment.topic}", Sentiment: "${res.comment.sentiment}"${res.comment.documentReference ? `, Ref: "${res.comment.documentReference}"` : ""})`).join("\n")}
 
 Format your response using beautiful, structured Markdown. Make it professional and direct, highlighting overlapping needs and key friction points. Include:
 1. **Case-Specific Critique**: Breakdown of the primary report.
@@ -591,7 +622,6 @@ Format your response using beautiful, structured Markdown. Make it professional 
 4. **Concrete Next Steps**: 2-3 strategic developer/product recommendations.`;
 
     try {
-      const neighborhoodNodes = [selectedComment, ...similarToSelected.map((r) => r.comment)];
       let synthesisText = "";
       try {
         synthesisText = await fetchLocalCompletion(structuredPrompt, llmSettings);
@@ -599,7 +629,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
       } catch (innerErr) {
         console.warn("Local model query failed, compiling offline client-side heuristic synthesis.", innerErr);
         showToast("Local LLM offline. Compiled client-side subset critique.", "info");
-        synthesisText = generateLocalHeuristicNeighborhoodSynthesis(selectedComment, similarToSelected);
+        synthesisText = generateLocalHeuristicNeighborhoodSynthesis(selectedComment, similarToSelected, docContextBlock);
       }
 
       const tracedText = synthesisText + generateTraceabilitySection(neighborhoodNodes);
@@ -629,10 +659,13 @@ Format your response using beautiful, structured Markdown. Make it professional 
     showToast(`Requesting LLM review for Cluster #${groupIndex + 1}...`, "info");
 
     const totalMembers = 1 + group.duplicates.length;
+    const clusterNodes = [group.originalComment, ...group.duplicates.map((d: any) => d.comment)];
+    const docContextBlock = buildDocumentContextPromptBlock(clusterNodes, documentSections);
+
     const structuredPrompt = `You are a Senior Customer Quality Auditor & Product Strategy Analyst.
 Analyze the following cluster of highly similar / duplicate feedback comments.
 Provide a critical, objective review summarizing what stakeholders in this cluster are saying, their underlying intent, friction points, and specific actionable recommendations for deduplication and product action.
-
+${docContextBlock}
 Cluster Details:
 - Number of items in Cluster: ${totalMembers}
 - Similarity Threshold: ${filters.similarityThreshold * 100}%
@@ -641,9 +674,10 @@ Primary Retained Comment:
 Text: "${group.originalComment.text}"
 Topic: "${group.originalComment.topic}"
 Sentiment: "${group.originalComment.sentiment}"
+${group.originalComment.documentReference ? `Document Reference: "${group.originalComment.documentReference}"` : ""}
 
 Other Matching/Duplicate Comments in Cluster:
-${group.duplicates.map((dup: any, i: number) => `[Duplicate ${i+1}] (Similarity Match: ${(dup.similarity * 100).toFixed(0)}%) Text: "${dup.comment.text}" (Topic: "${dup.comment.topic}", Sentiment: "${dup.comment.sentiment}")`).join("\n")}
+${group.duplicates.map((dup: any, i: number) => `[Duplicate ${i+1}] (Similarity Match: ${(dup.similarity * 100).toFixed(0)}%) Text: "${dup.comment.text}" (Topic: "${dup.comment.topic}", Sentiment: "${dup.comment.sentiment}"${dup.comment.documentReference ? `, Ref: "${dup.comment.documentReference}"` : ""})`).join("\n")}
 
 Format your response using beautiful, structured Markdown. Make it professional and direct. Include:
 1. **Cluster Essence**: Objective critique of what the core complaint or suggestion is.
@@ -651,7 +685,6 @@ Format your response using beautiful, structured Markdown. Make it professional 
 3. **Product & Audit Recommendation**: 2-3 specific strategic guidelines on how to resolve the root user friction and whether these rows are safe to archive/merge.`;
 
     try {
-      const clusterNodes = [group.originalComment, ...group.duplicates.map((d: any) => d.comment)];
       let synthesisText = "";
       try {
         synthesisText = await fetchLocalCompletion(structuredPrompt, llmSettings);
@@ -697,10 +730,12 @@ Format your response using beautiful, structured Markdown. Make it professional 
     showToast(`Requesting LLM review for ${realFiltered.length} refined nodes...`, "info");
 
     const activeQueryText = filters.searchQuery.trim();
+    const docContextBlock = buildDocumentContextPromptBlock(realFiltered, documentSections);
+
     const structuredPrompt = `You are a Lead CX Strategist & Vector Data Auditor.
 Analyze the following custom subset of customer feedback records matching the user's current search/refinement filters.
 Provide a critical, objective review summarizing the collective voice of this segment, key complaints/friction points, and specific action recommendations.
-
+${docContextBlock}
 Segment Details:
 - Active Search Query: "${activeQueryText || "N/A (All Active Filters)"}"
 - Sentiment Filters: [${filters.sentiments.join(", ")}]
@@ -708,7 +743,7 @@ Segment Details:
 - Number of items in segment: ${realFiltered.length}
 
 Matching Customer Comments:
-${realFiltered.slice(0, 30).map((c, i) => `[Record ${i+1}] ID: ${c.id} (Topic: "${c.topic}", Sentiment: "${c.sentiment}"): "${c.text}"`).join("\n")}
+${realFiltered.slice(0, 30).map((c, i) => `[Record ${i+1}] ID: ${c.id} (Topic: "${c.topic}", Sentiment: "${c.sentiment}"${c.documentReference ? `, Ref: "${c.documentReference}"` : ""}): "${c.text}"`).join("\n")}
 ${realFiltered.length > 30 ? `...and ${realFiltered.length - 30} more matching comments.` : ""}
 
 Format your response using beautiful, structured Markdown. Make it professional and direct. Include:
@@ -726,7 +761,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
       } catch (innerErr) {
         console.warn("Local model query failed, compiling offline client-side refined nodes critique.", innerErr);
         showToast("Local LLM offline. Compiled client-side refined nodes critique.", "info");
-        synthesisText = generateLocalHeuristicRefinedNodesSynthesis(realFiltered, activeQueryText);
+        synthesisText = generateLocalHeuristicRefinedNodesSynthesis(realFiltered, activeQueryText, docContextBlock);
       }
 
       const tracedText = synthesisText + generateTraceabilitySection(refinedNodes);
@@ -763,17 +798,19 @@ Format your response using beautiful, structured Markdown. Make it professional 
     setIsAnalyzingSemanticQuery(true);
     showToast(`Requesting LLM review for "${queryText}" (${results.length} results)...`, "info");
 
+    const docContextBlock = buildDocumentContextPromptBlock(results, documentSections);
+
     const structuredPrompt = `You are a Lead Customer Experience Strategist & Vector Auditor.
 Analyze the following customer feedback records retrieved via semantic search vector similarity.
 Provide a critical, objective review summarizing the collective user feedback, their central complaints/friction, and actionable developer recommendations.
-
+${docContextBlock}
 Search Parameters:
 - Semantic Query Text: "${queryText}"
 - Match Threshold: >= ${filters.similarityThreshold * 100}%
 - Total Matches: ${results.length}
 
 Top Matching Comments:
-${results.slice(0, 30).map((c, i) => `[Match ${i+1}] ID: ${c.id} (Similarity: ${c.similarityScore !== undefined ? (c.similarityScore * 100).toFixed(0) : "N/A"}%): "${c.text}"`).join("\n")}
+${results.slice(0, 30).map((c, i) => `[Match ${i+1}] ID: ${c.id} (Similarity: ${c.similarityScore !== undefined ? (c.similarityScore * 100).toFixed(0) : "N/A"}%${c.documentReference ? `, Ref: "${c.documentReference}"` : ""}): "${c.text}"`).join("\n")}
 ${results.length > 30 ? `...and ${results.length - 30} more matching comments.` : ""}
 
 Format your response using beautiful, structured Markdown. Make it professional and direct. Include:
@@ -790,7 +827,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
       } catch (innerErr) {
         console.warn("Local model query failed, compiling offline client-side semantic search synthesis.", innerErr);
         showToast("Local LLM offline. Compiled client-side query critique.", "info");
-        synthesisText = generateLocalHeuristicRefinedNodesSynthesis(results, queryText);
+        synthesisText = generateLocalHeuristicRefinedNodesSynthesis(results, queryText, docContextBlock);
       }
 
       const tracedText = synthesisText + generateTraceabilitySection(semanticNodes);
@@ -1431,6 +1468,18 @@ Respond using clean, structured markdown with the following headers:
             >
               <FolderKanban className="w-3.5 h-3.5 text-[#4A6741]" />
               <span>Stakeholder Grid</span>
+            </button>
+          )}
+
+          {/* Document Context Workbench Button */}
+          {isInitialized && (
+            <button 
+              onClick={() => setIsDocumentContextModalOpen(true)}
+              className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-amber-600 hover:bg-amber-50 text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+              title="Open Document Context Workbench Modal"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+              <span>Doc Model ({documentSections.filter(s => s.hasText).length}/{documentSections.length})</span>
             </button>
           )}
 
@@ -2107,6 +2156,19 @@ Respond using clean, structured markdown with the following headers:
         stakeholderMappings={stakeholderMappings}
         onSaveMapping={handleSaveStakeholderMapping}
         onSaveAllMappings={handleSaveAllStakeholderMappings}
+        showToast={showToast}
+      />
+
+      {/* Document Context Model Workbench Modal */}
+      <DocumentContextModal
+        isOpen={isDocumentContextModalOpen}
+        onClose={() => setIsDocumentContextModalOpen(false)}
+        comments={comments}
+        sections={documentSections}
+        onSaveSections={(updated) => {
+          setDocumentSections(updated);
+          showToast(`Saved ${updated.length} document context section(s)!`, "success");
+        }}
         showToast={showToast}
       />
     </div>

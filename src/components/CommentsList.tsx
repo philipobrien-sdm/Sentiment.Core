@@ -466,6 +466,12 @@ Please write a gorgeous, highly precise, professional viewpoint synthesis in cle
                       <MessageSquare className="w-3 h-3 opacity-70" />
                       {c.topic || "General"}
                     </span>
+                    {c.documentReference && (
+                      <span className={`flex items-center gap-1 font-mono text-[9px] ${isSelected ? "text-amber-300" : "text-amber-800 bg-amber-50 px-1 py-0.5 border border-amber-200"}`}>
+                        <FileText className="w-3 h-3" />
+                        {c.documentReference}
+                      </span>
+                    )}
                     {c.organizationName && (
                       <OrganizationBadge
                         organizationName={c.organizationName}

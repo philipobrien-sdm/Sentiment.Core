@@ -12,6 +12,7 @@ import { fetchLocalEmbeddings, getDeterministicPseudoEmbedding, fetchLocalComple
 import { getCommentEmbedding } from "../utils/embeddingsCache";
 import { buildStakeholderListMarkdown, buildCsvTraceabilityRowsMarkdown } from "./CommentsList";
 import { MarkdownViewer } from "./MarkdownViewer";
+import { buildDocumentContextPromptBlock } from "../utils/documentContext";
 
 interface CustomTopicClusterViewProps {
   comments: CommentItem[];
@@ -376,6 +377,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
     showToast(`Synthesizing ${currentGroup.comments.length} comments for cluster "${currentGroup.topicName}"...`, "info");
 
     const groupComments = currentGroup.comments;
+    const docContextBlock = buildDocumentContextPromptBlock(groupComments);
     
     // Prepend stakeholder list and append CSV traceability rows via shared app helpers
     const prependedStakeholderList = buildStakeholderListMarkdown(groupComments, stakeholderMappings);
@@ -384,7 +386,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
     const structuredPrompt = `You are a Senior Strategic Customer Experience Auditor & Product Director.
 Analyze the following cluster of ${groupComments.length} stakeholder feedback comments grouped under the custom topic cluster "${currentGroup.topicName}".
 Provide a critical, comprehensive qualitative synthesis of this cluster, summarizing stakeholder intent, key friction points, cross-organization patterns, and concrete product & engineering recommendations.
-
+${docContextBlock}
 Cluster Details:
 - Target Topic Cluster Name: "${currentGroup.topicName}"
 - Total Comments in Cluster: ${groupComments.length} (${currentGroup.preAssignedCount} file-assigned, ${currentGroup.autoMappedCount} vector auto-assigned)
@@ -392,7 +394,7 @@ Cluster Details:
 - Represented Organizations (${currentGroup.organizations.length}): ${currentGroup.organizations.slice(0, 8).join(", ") || "General Public"}
 
 Representative Feedback Comments in this Cluster:
-${groupComments.slice(0, 30).map((c, i) => `[Comment ${i+1}] ID: ${c.originalId || c.id} (Org: "${c.organizationName || "N/A"}", Sentiment: "${c.sentiment.toUpperCase()}", Source: "${c.isPreAssigned ? "File Assigned" : "Auto Primary"}"): "${c.text}"${c.secondaryTopics && c.secondaryTopics.length > 0 ? ` (Secondary Tags: ${c.secondaryTopics.map(s => s.topic).join(", ")})` : ""}`).join("\n")}
+${groupComments.slice(0, 30).map((c, i) => `[Comment ${i+1}] ID: ${c.originalId || c.id} (Org: "${c.organizationName || "N/A"}", Sentiment: "${c.sentiment.toUpperCase()}", Source: "${c.isPreAssigned ? "File Assigned" : "Auto Primary"}"${c.documentReference ? `, Ref: "${c.documentReference}"` : ""}): "${c.text}"${c.secondaryTopics && c.secondaryTopics.length > 0 ? ` (Secondary Tags: ${c.secondaryTopics.map(s => s.topic).join(", ")})` : ""}`).join("\n")}
 ${groupComments.length > 30 ? `...and ${groupComments.length - 30} more comments in this cluster.` : ""}
 
 Format your output using clean, professional Markdown headers:
@@ -409,7 +411,7 @@ Format your output using clean, professional Markdown headers:
         showToast(`Cluster synthesis complete for "${currentGroup.topicName}"!`, "success");
       } catch (err) {
         console.warn("LLM query failed or offline, using heuristic fallback:", err);
-        coreMarkdown = generateLocalHeuristicCustomClusterSynthesis(currentGroup.topicName, groupComments);
+        coreMarkdown = generateLocalHeuristicCustomClusterSynthesis(currentGroup.topicName, groupComments, docContextBlock);
         showToast("LLM offline. Generated heuristic cluster synthesis.", "info");
       }
 

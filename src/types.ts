@@ -15,8 +15,17 @@ export interface CommentItem {
   originalRowData?: Record<string, string>; // Holds all columns from the uploaded CSV
   originalId?: string;
   organizationName?: string;
+  documentReference?: string; // Reference to reviewed material (e.g. "Section 3.1", "Clause 4.2", "Page 12")
   clusterConfidence?: number; // Similarity/Confidence score for primary cluster assignment (0.0 to 1.0)
   secondaryTopics?: { topic: string; confidence: number }[]; // Secondary cluster matches >= 50%
+}
+
+export interface DocumentSection {
+  id: string;
+  reference: string; // Document reference name or clause (e.g., "Section 3.2: Safety Protocols")
+  title?: string;
+  excerptText: string; // Copy-pasted or uploaded text content of this section
+  updatedAt?: string;
 }
 
 export interface DuplicateGroup {

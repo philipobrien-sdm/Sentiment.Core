@@ -423,7 +423,8 @@ export async function testLlmConnection(settings: LlmSettings): Promise<{
 // Generates a beautifully formatted, tailored neighborhood critique and stakeholder summary (client-side heuristic fallback)
 export function generateLocalHeuristicNeighborhoodSynthesis(
   primary: { id: string; text: string; sentiment: string; topic: string },
-  neighbors: { comment: { id: string; text: string; sentiment: string; topic: string }; similarity: number }[]
+  neighbors: { comment: { id: string; text: string; sentiment: string; topic: string }; similarity: number }[],
+  docContextText?: string
 ): string {
   if (!primary) return "No active record selected.";
   
@@ -535,7 +536,8 @@ ${duplicateList || "- No redundant copies in this group."}
 // Generates a beautifully formatted summary and audit of refined nodes from the search/refinement panel
 export function generateLocalHeuristicRefinedNodesSynthesis(
   nodes: { id: string; text: string; sentiment: string; topic: string; csvRowIndex?: number }[],
-  searchQuery: string
+  searchQuery: string,
+  docContextText?: string
 ): string {
   const totalNodes = nodes.length;
   
@@ -595,7 +597,8 @@ ${sampleList || "- No items are present in this segment."}
 // Generates a qualitative synthesis of comments within a custom topic cluster (client-side heuristic fallback)
 export function generateLocalHeuristicCustomClusterSynthesis(
   topicName: string,
-  comments: { id: string; text: string; sentiment: string; topic?: string; organizationName?: string; isPreAssigned?: boolean; secondaryTopics?: { topic: string; confidence: number }[] }[]
+  comments: { id: string; text: string; sentiment: string; topic?: string; organizationName?: string; isPreAssigned?: boolean; secondaryTopics?: { topic: string; confidence: number }[] }[],
+  docContextText?: string
 ): string {
   const totalCount = comments.length;
   const sentimentCounts = {

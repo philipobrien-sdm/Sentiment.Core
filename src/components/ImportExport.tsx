@@ -38,6 +38,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({
   const [selectedTopicField, setSelectedTopicField] = useState<string>("");
   const [selectedIdField, setSelectedIdField] = useState<string>("");
   const [selectedOrgField, setSelectedOrgField] = useState<string>("");
+  const [selectedDocRefField, setSelectedDocRefField] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -112,12 +113,28 @@ export const ImportExport: React.FC<ImportExportProps> = ({
               const lower = h.toLowerCase();
               return lower.includes("org") || lower.includes("company") || lower.includes("organization") || lower.includes("account");
             });
+            const docRefHeader = headers.find((h) => {
+              const lower = h.toLowerCase();
+              return (
+                lower.includes("doc") ||
+                lower.includes("section") ||
+                lower.includes("clause") ||
+                lower.includes("ref") ||
+                lower.includes("page") ||
+                lower.includes("article") ||
+                lower.includes("provision") ||
+                lower.includes("requirement") ||
+                lower.includes("policy") ||
+                lower.includes("material")
+              );
+            });
 
             setSelectedTextField(commentHeader || headers[0]);
             setSelectedSentimentField(sentimentHeader || "");
             setSelectedTopicField(topicHeader || "");
             setSelectedIdField(idHeader || "");
             setSelectedOrgField(orgHeader || "");
+            setSelectedDocRefField(docRefHeader || "");
           } else {
             setErrorMessage("The uploaded CSV file appears to be empty.");
           }
@@ -199,6 +216,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({
             const parsedId = selectedIdField && row[selectedIdField] ? String(row[selectedIdField]).trim() : "";
             const finalId = parsedId || `csv_backup_${idx + 1}_${Math.random().toString(36).substr(2, 4)}`;
             const orgName = selectedOrgField && row[selectedOrgField] ? String(row[selectedOrgField]).trim() : undefined;
+            const docRef = selectedDocRefField && row[selectedDocRefField] ? String(row[selectedDocRefField]).trim() : undefined;
 
             return {
               id: finalId,
@@ -213,6 +231,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({
               csvRowIndex: idx + 1,
               originalId: parsedId || finalId,
               organizationName: orgName || undefined,
+              documentReference: docRef || undefined,
               originalRowData: row
             };
           });
@@ -291,6 +310,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({
         const parsedId = selectedIdField && row[selectedIdField] ? String(row[selectedIdField]).trim() : "";
         const finalId = parsedId || `csv_rec_${idx + 1}`;
         const orgName = selectedOrgField && row[selectedOrgField] ? String(row[selectedOrgField]).trim() : undefined;
+        const docRef = selectedDocRefField && row[selectedDocRefField] ? String(row[selectedDocRefField]).trim() : undefined;
 
         return {
           id: finalId,
@@ -305,6 +325,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({
           csvRowIndex: idx + 1,
           originalId: parsedId || finalId,
           organizationName: orgName || undefined,
+          documentReference: docRef || undefined,
           originalRowData: row
         };
       });
@@ -488,6 +509,23 @@ export const ImportExport: React.FC<ImportExportProps> = ({
                     className="w-full bg-white border border-[#E5E3DF] rounded-none px-2.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-xs"
                   >
                     <option value="">-- None / No organization data --</option>
+                    {csvPreview.headers.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 6. Document Reference / Section Column Mapper */}
+                <div>
+                  <label className="font-semibold text-gray-600 block mb-1.5 uppercase tracking-wider text-[9px]">
+                    Document Ref / Section / Clause Column (Optional):
+                  </label>
+                  <select
+                    value={selectedDocRefField}
+                    onChange={(e) => setSelectedDocRefField(e.target.value)}
+                    className="w-full bg-white border border-[#E5E3DF] rounded-none px-2.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-xs"
+                  >
+                    <option value="">-- Auto-detect or omit document reference --</option>
                     {csvPreview.headers.map((h) => (
                       <option key={h} value={h}>{h}</option>
                     ))}
