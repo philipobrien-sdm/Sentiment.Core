@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { CommentItem, LlmSettings, StakeholderMapping } from "../types";
+import { CommentItem, LlmSettings, StakeholderMapping, getQuadrantInfo } from "../types";
 import { OrganizationBadge } from "./OrganizationBadge";
 import { getCommentEmbedding } from "../utils/embeddingsCache";
 import { calculateCosineSimilarity } from "./DuplicateReview";
@@ -58,6 +58,76 @@ ${negatives.slice(0, 3).map(n => `- *"Row ${n.csvRowIndex || "?"} (${n.organizat
 1. **Unify Configuration Options**: Build standard options to bridge the gap between positive and negative user scenarios.
 2. **Deploy Targeted Optimization**: Direct developer review toward resolving the specific friction raised in the feedback list.
 3. **Configure Settings**: To replace this heuristic report with real-time generative analysis, start a local LLM endpoint (Ollama/LM Studio) and connect it in the Settings drawer.`;
+}
+
+export function buildStakeholderListMarkdown(
+  nodes: CommentItem[],
+  stakeholderMappings: Record<string, StakeholderMapping> = {}
+): string {
+  if (!nodes || nodes.length === 0) return "";
+
+  const orgMap = new Map<string, { total: number; positive: number; neutral: number; negative: number }>();
+
+  nodes.forEach((c) => {
+    const org = c.organizationName?.trim() || c.originalRowData?.["Organization"] || c.originalRowData?.["Org"] || c.originalRowData?.["Organization Name"] || "Unspecified Organization";
+    if (!orgMap.has(org)) {
+      orgMap.set(org, { total: 0, positive: 0, neutral: 0, negative: 0 });
+    }
+    const entry = orgMap.get(org)!;
+    entry.total += 1;
+    if (c.sentiment === "positive") entry.positive += 1;
+    else if (c.sentiment === "negative") entry.negative += 1;
+    else entry.neutral += 1;
+  });
+
+  const lines: string[] = [];
+  orgMap.forEach((stats, org) => {
+    const mapping = stakeholderMappings[org];
+    let classificationBadge = "";
+    if (mapping) {
+      const qInfo = getQuadrantInfo(mapping.influence, mapping.interest);
+      classificationBadge = ` *(${qInfo.shortLabel} • ${qInfo.priorityWeight}x Priority)*`;
+    }
+
+    const sentimentBreakdown = [];
+    if (stats.positive > 0) sentimentBreakdown.push(`${stats.positive} Positive`);
+    if (stats.neutral > 0) sentimentBreakdown.push(`${stats.neutral} Neutral`);
+    if (stats.negative > 0) sentimentBreakdown.push(`${stats.negative} Negative`);
+
+    lines.push(`- **${org}**${classificationBadge} — **${stats.total} comment${stats.total > 1 ? "s" : ""}** (${sentimentBreakdown.join(", ")})`);
+  });
+
+  const topic = nodes[0]?.topic || "General";
+
+  return `### 👥 Participating Stakeholder Organizations
+*Synthesized feedback across **${orgMap.size} stakeholder organization(s)** representing **${nodes.length} dataset item(s)** on topic **"${topic}"**:*
+
+${lines.join("\n")}`;
+}
+
+export function buildCsvTraceabilityRowsMarkdown(nodes: CommentItem[]): string {
+  if (!nodes || nodes.length === 0) return "";
+
+  // Sort nodes by csvRowIndex ascending if available
+  const sorted = [...nodes].sort((a, b) => (a.csvRowIndex || 999999) - (b.csvRowIndex || 999999));
+
+  let table = `### 📋 Traceability Register: Referenced CSV Rows\n`;
+  table += `*Audit trail of all **${sorted.length} CSV dataset rows** incorporated directly into this report:*\n\n`;
+  table += `| CSV Row # | Comment ID | Organization | Sentiment | Feedback Comment Text |\n`;
+  table += `| :--- | :--- | :--- | :--- | :--- |\n`;
+
+  sorted.forEach((c) => {
+    const rowNum = c.csvRowIndex ? `Row #${c.csvRowIndex}` : "N/A";
+    const id = `\`${c.id}\``;
+    const org = c.organizationName || "Unspecified Org";
+    const sentiment = c.sentiment.toUpperCase();
+    const textSnippet = c.text.length > 200 ? `${c.text.substring(0, 200)}...` : c.text;
+    const cleanText = textSnippet.replace(/[\r\n]+/g, " ").replace(/\|/g, "\\|");
+
+    table += `| ${rowNum} | ${id} | ${org} | ${sentiment} | ${cleanText} |\n`;
+  });
+
+  return table;
 }
 
 export const CommentsList: React.FC<CommentsListProps> = ({
@@ -209,6 +279,20 @@ export const CommentsList: React.FC<CommentsListProps> = ({
 
     const relatedList = similarTopicComments.map(s => s.comment);
 
+    // Build unique set of nodes involved in this perspective synthesis
+    const allNodesMap = new Map<string, CommentItem>();
+    if (selectedComment) {
+      allNodesMap.set(selectedComment.id, selectedComment);
+    }
+    relatedList.forEach(c => {
+      allNodesMap.set(c.id, c);
+    });
+    const allSynthesisNodes = Array.from(allNodesMap.values());
+
+    // Prepend stakeholder list and append CSV traceability rows via the application logic
+    const prependedStakeholderList = buildStakeholderListMarkdown(allSynthesisNodes, stakeholderMappings);
+    const appendedCsvTraceabilityRows = buildCsvTraceabilityRowsMarkdown(allSynthesisNodes);
+
     const structuredPrompt = `You are a Principal Strategic Product & Customer Experience Analyst.
 Analyze the following primary stakeholder feedback comment and contrast it with other comments addressing the exact same topic area ("${selectedComment.topic}").
 The goal is to compare and synthesize the different viewpoints and opinions, showing how they conflict, align, or highlight different aspects of this same topic so that differing views on a single item can be easily seen and reconciled together.
@@ -228,30 +312,33 @@ Please write a gorgeous, highly precise, professional viewpoint synthesis in cle
 4. **Actionable Recommendations**: Provide 2-3 concrete strategic recommendations for product or engineering teams to reconcile these differing views.`;
 
     try {
-      let resultText = "";
+      let coreText = "";
       if (llmSettings.baseUrl && llmSettings.useCustomEmbedding) {
-        resultText = await fetchLocalCompletion(structuredPrompt, llmSettings);
+        coreText = await fetchLocalCompletion(structuredPrompt, llmSettings);
       } else {
         // Fallback to beautiful local heuristic
         await new Promise(resolve => setTimeout(resolve, 1000));
-        resultText = generateLocalHeuristicPerspectiveSynthesis(selectedComment, relatedList);
+        coreText = generateLocalHeuristicPerspectiveSynthesis(selectedComment, relatedList);
       }
 
-      setSynthesisResult(resultText);
+      const fullReportMarkdown = `${prependedStakeholderList}\n\n---\n\n${coreText}\n\n---\n\n${appendedCsvTraceabilityRows}`;
+
+      setSynthesisResult(fullReportMarkdown);
 
       // Save to global history if callback provided
       if (onSaveSynthesisToHistory) {
         onSaveSynthesisToHistory({
-          title: `Comparative Perspektive: "${selectedComment.topic}"`,
-          markdown: resultText,
+          title: `Comparative Perspective: "${selectedComment.topic}"`,
+          markdown: fullReportMarkdown,
           source: "perspective"
         });
       }
     } catch (e) {
       console.error(e);
       // Fallback
-      const fallbackText = generateLocalHeuristicPerspectiveSynthesis(selectedComment, relatedList);
-      setSynthesisResult(fallbackText);
+      const fallbackCore = generateLocalHeuristicPerspectiveSynthesis(selectedComment, relatedList);
+      const fallbackReport = `${prependedStakeholderList}\n\n---\n\n${fallbackCore}\n\n---\n\n${appendedCsvTraceabilityRows}`;
+      setSynthesisResult(fallbackReport);
     } finally {
       setIsSynthesizing(false);
     }

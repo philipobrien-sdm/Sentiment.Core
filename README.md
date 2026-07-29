@@ -1,54 +1,80 @@
-# Vector-Based Feedback Explorer & Similarity Query Engine
+# Vector-Based Feedback Explorer & Stakeholder Intelligence Engine
 
-A powerful, high-performance, full-stack visual analytics tool designed to ingest customer comments, support tickets, or feedback CSV datasets, process them via text-embedding models, and perform interactive cluster analysis. 
+A comprehensive, high-performance, full-stack visual analytics application designed to ingest customer comments, public consultation feedback, support tickets, and survey datasets. It converts feedback into high-dimensional text embeddings, provides interactive 2D spatial visualization, performs semantic searches, deduplicates records, and generates stakeholder-prioritized AI executive syntheses.
 
-Built with a fast **Express + Vite + React (TypeScript)** architecture, it features offline-first processing, client-side vector calculations, semantic searching, and AI-powered duplication reviews.
+Built with an **Express + Vite + React (TypeScript)** architecture, it features an offline-first workflow, client-side vector calculations, custom topic clustering, a Stakeholder Power-Interest Matrix, and seamless local LLM integration (Ollama, LM Studio, OpenAI-compatible APIs).
 
 ---
 
-## 🚀 Key Capabilities
+## 🚀 Key Major Functions
 
-### 📍 1. Interactive 2D Similarity Plot
-* **High-Dimensional Projections:** Visualizes feedback comments in a responsive 2D coordinate system.
-* **Intelligent Color Mapping:** Instantly colorize comments by **Sentiment** (Positive/Neutral/Negative) or **Topic** clusters.
-* **Map Tracking & Spotlighting:** Select any data point on the canvas to highlight relative details and pinpoint specific records.
+### 🎯 1. Initial Dataset Context & Calibrated AI Personas
+* **Domain Context Calibration:** Set an initial background context or purpose for uploaded CSV datasets (e.g., *Public Policy & Zoning, Product & SaaS, Employee Surveys, Healthcare & Clinical, Higher Education*).
+* **Live System Persona Generation:** Automatically adapts the AI system prompt based on the file context to tailor executive syntheses and thematic analysis specifically for your domain.
+* **Intelligent Column Mapper:** Features auto-header detection, data preview sampling, and flexible field assignment for Comment Text, Record ID, Date, Sentiment, Topic, and Organization fields.
 
-### 🔍 2. Semantic Query Engine
-* **Natural Language Vector Search:** Write a custom search statement (e.g., *"performance lag during checkout"*) to generate a vector on-the-fly.
-* **Cosine Similarity Evaluator:** Ranks and filters records matching your search statement based on high-dimensional angular similarity.
-* **Adjustable Cutoff Thresholds:** Slide the similarity match threshold from Broad (10%) to Strict (95%) to fine-tune results.
+### 📍 2. Interactive 2D Vector Canvas
+* **High-Dimensional Spatial Projections:** Maps feedback text onto a responsive 2D coordinate space derived from vector embeddings.
+* **Multi-Dimensional Color Mapping:** Colorize data points dynamically by **Sentiment** (*Positive/Neutral/Negative*), **Topic Clusters**, **Organization**, or **Stakeholder Power-Interest Quadrants**.
+* **Interactive Spotlight & Inspector:** Zoom, pan, and hover over data points to inspect comment text, sentiment, row index, and organization metadata in real time.
 
-### 🛡️ 3. AI-Powered Deduplication Audit
-* **Intelligent Grouping:** Scans your dataset for redundant, overlapping, or identical feedback entries using pairwise cosine similarity metrics.
-* **Performance Safeguards:** Automatically caps similarity deduplication checks at **1,500 records** to prevent CPU lockups on massive datasets, while preserving full visual exploratory analytics for the entire dataset.
-* **Merge & Archive Actions:** Consolidate redundant comments to keep datasets clean.
+### 🏛️ 3. Stakeholder Power-Interest Matrix & Strategic Mapping
+* **2x2 Stakeholder Classification:** Classify stakeholder organizations along **Influence (Power)** and **Interest** axes (1.0 to 5.0 scale).
+* **Four Strategic Quadrants:**
+  * 🔴 **Key Players** (*High Power, High Interest*) – **2.5x Priority Weight**
+  * 🟡 **Keep Satisfied** (*High Power, Low Interest*) – **1.8x Priority Weight**
+  * 🔵 **Keep Informed** (*Low Power, High Interest*) – **1.2x Priority Weight**
+  * ⚪ **Monitor** (*Low Power, Low Interest*) – **0.8x Priority Weight**
+* **Automated Batch Heuristics:** Automatically discover organizations across the dataset and apply initial quadrant classifications.
+* **Priority-Weighted Synthesis:** Incorporates stakeholder priority weights directly into AI synthesis prompts, ensuring Key Player concerns are front-and-center in executive reports.
 
-### 📊 4. Executive Summary Writer & Synthesis
-* **Structural Outline Generator:** Prompts an LLM (such as local models or Gemini) to craft concise, executive-ready syntheses of feedback trends and key actionable insights.
+### 🏷️ 4. Dynamic Topic Clustering & Custom Topic Manager
+* **Automatic & Algorithmic Clustering:** Group feedback by semantic themes using vector distance algorithms and LLM analysis.
+* **Custom Cluster Workbench:** Create custom topic tags, reclassify individual or batched comments, merge related themes, rename topics, or delete obsolete categories.
+* **Export Custom Taxonomies:** Download refined, re-clustered feedback datasets with updated topic metadata in CSV or JSON formats.
 
-### 🗄️ 5. Dataset Configuration & Local LLM Integration
-* **Double Embedding Modes:**
-  * **Built-in Heuristics:** Employs deterministic, high-speed unit-length pseudo-embeddings for instant testing without APIs.
-  * **Local Custom Embeddings:** Integrates with local embedding models (Ollama, HuggingFace, OpenAI-compatible APIs) via a backend CORS proxy route.
-* **Local Storage Safety:** To prevent browser crashes and `QuotaExceededError` messages, the app strips raw, multi-dimensional floating-point arrays (`embedding` property) before syncing data to `localStorage`.
-* **Automatic JSON Exports:** When an embedding batch concludes, the app automatically prepares and downloads a complete `final_session_dataset_complete.json` file containing all high-dimensional vectors for offline use.
+### 🔍 5. Semantic Query Engine
+* **Natural Language Vector Search:** Input any natural language query statement (e.g., *"usability friction during checkout"* or *"transit route delay complaints"*).
+* **Cosine Similarity Evaluator:** Calculates angular similarity between the search vector and all dataset record vectors.
+* **Adjustable Threshold Cutoff:** Use the precision slider (10% to 95% similarity match) to filter and highlight matching records instantly.
+
+### 🛡️ 6. AI-Powered Deduplication Audit
+* **Pairwise Vector Matrix Scanner:** Scans datasets for duplicate, near-identical, or redundant feedback entries using cosine similarity metrics.
+* **Performance Safeguards:** Automatically caps pairwise deduplication checks at **1,500 records** to prevent CPU bottlenecks on large datasets while retaining full spatial visualization for all points.
+* **Audit & Merge Actions:** Inspect duplicate clusters, select primary entries, archive redundant records, and export clean, deduplicated datasets or audit logs.
+
+### 📊 7. Executive Synthesis & AI Report Writer
+* **Stakeholder-Prioritized Reports:** Generates structured Markdown executive reports that highlight critical feedback from top-tier Key Players.
+* **Structured Output:**
+  1. **Executive Summary** (Overall mood & core takeaways)
+  2. **Key Player & High-Power Stakeholder Priorities** (Targeted feedback from critical organizations)
+  3. **Top Recurring Issues & Common Themes** (Key friction points and positive request clusters)
+  4. **Strategic Action Plan** (Actionable bullet points prioritized by stakeholder impact)
+  5. **Traceability Section** (Direct row index citations linking conclusions back to original CSV records)
+* **Synthesis History:** Save, review, copy, or download generated reports at any time.
+
+### 🗄️ 8. Flexible LLM & Local Vector Embedding Integration
+* **Dual Embedding Modes:**
+  * **Built-in Heuristics:** High-speed pseudo-embedding engine for instant testing without external dependencies or API keys.
+  * **Local Custom LLM Proxy:** Integrates with local embedding models (*Ollama, LM Studio, Llama.cpp, OpenAI-compatible APIs*) via the backend CORS proxy (`/api/proxy-llm`).
+* **Storage Optimization:** Automatically strips raw floating-point arrays before saving to `localStorage` to prevent browser quota exceptions, while auto-downloading complete `final_session_dataset_complete.json` files containing full high-dimensional vectors for offline reuse.
 
 ---
 
 ## 🏗️ Technical Architecture
 
-* **Frontend:** React 19 (TypeScript), Vite, Tailwind CSS (v4), Motion (for layout transitions), Lucide React (for iconography).
-* **Backend:** Express (port 3000) serves both as the asset server and a backend CORS-bypassing proxy for local LLM servers.
-* **Build System:** Bundled via `esbuild` into a self-contained CommonJS output (`dist/server.cjs`) to guarantee smooth Node runtime resolution.
+* **Frontend:** React 19 (TypeScript), Vite, Tailwind CSS (v4), Motion (layout animations), Lucide React (iconography).
+* **Backend:** Express (port 3000) acting as a static asset server and a backend CORS-bypassing proxy for local LLM and embedding endpoints.
+* **Build System:** Compiled via `esbuild` into a bundled CommonJS output (`dist/server.cjs`) for clean Node runtime execution.
 
 ---
 
 ## ⚙️ Local Installation & Setup
 
 ### Prerequisites
-* **Node.js** (v18 or higher recommended)
+* **Node.js** (v18 or higher)
 * **npm** (v9 or higher)
-* *(Optional)* A local LLM server running, such as **Ollama**, **Llama.cpp**, or an OpenAI-compatible proxy.
+* *(Optional)* A local LLM/embedding server (e.g., **Ollama**, **LM Studio**, or an OpenAI-compatible server).
 
 ### 1. Clone & Navigate
 ```bash
@@ -57,50 +83,47 @@ cd <project-directory>
 ```
 
 ### 2. Install Dependencies
-Install all backend and frontend packages defined in `package.json`:
 ```bash
 npm install
 ```
 
 ### 3. Environment Setup
-The development server will read environment variables. Create a `.env` file in the root directory if you want to configure specific ports or backend secrets:
-```bash
-# .env
+Create a `.env` file in the root directory if needed:
+```env
 PORT=3000
 NODE_ENV=development
 ```
 
-### 4. Running the Development Server
-Execute the launch script:
+### 4. Run Development Server
 ```bash
 npm run dev
 ```
-The server will boot and bind to `http://localhost:3000`. You can open this address in your browser to interact with the application.
+Access the application at `http://localhost:3000`.
 
-### 5. Production Compilation & Launch
-To bundle and build the production-ready code:
+### 5. Production Build & Execution
 ```bash
-# Compile static assets & backend bundle
+# Compile static assets & server bundle
 npm run build
 
-# Start the optimized Node server
+# Start production server
 npm run start
 ```
 
 ---
 
-## 🛠️ Connecting a Local LLM (Ollama, etc.)
+## 🛠️ Connecting a Local LLM Server (Ollama Example)
 
-To run high-dimensional vector embeddings locally (e.g., mapping text directly to actual float arrays):
+To use local vector embeddings and completions:
 
-1. **Launch your local server.** For instance, with Ollama, run:
+1. **Start Ollama** with an embedding model (e.g., `nomic-embed-text`):
    ```bash
    ollama run nomic-embed-text
    ```
-2. **Navigate to "Manage Datasets"** in the app.
-3. Under **Local LLM & Embedding Settings**, toggle **Use Custom LLM / Embedding Server**.
-4. Configure the following values:
-   * **Embedding API Endpoint:** `http://localhost:11434/api/embeddings` (for Ollama) or your custom proxy.
-   * **Embedding Model Name:** `nomic-embed-text` (or your preferred local vector model).
-   * **JSON Path to Vector:** (Specify how the vector is returned, or leave blank to use the app's adaptive auto-parser).
-5. Load a dataset CSV and click **Start Vector Indexing**. Once complete, the processed dataset with raw embeddings will automatically trigger a complete JSON download for offline saving!
+2. **Open Settings / Manage Datasets** in the application.
+3. Toggle **Use Custom LLM / Embedding Server**.
+4. Configure endpoints:
+   * **Embedding Endpoint:** `http://localhost:11434/api/embeddings`
+   * **Embedding Model:** `nomic-embed-text`
+   * **LLM Completion Endpoint:** `http://localhost:11434/api/generate` (or `/v1/chat/completions`)
+5. Import your dataset. Vector calculations and synthesis reports will route directly through your local LLM server!
+
