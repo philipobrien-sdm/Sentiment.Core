@@ -28,6 +28,7 @@ import {
   generateLocalHeuristicRefinedNodesSynthesis
 } from "./utils/localLlm";
 import { MarkdownViewer } from "./components/MarkdownViewer";
+import { generateSelfContainedOfflineHtml } from "./utils/exportOfflineHtml";
 import { 
   Sparkles, 
   Map, 
@@ -869,7 +870,34 @@ Format your response using beautiful, structured Markdown. Make it professional 
     showToast("Marked as unique.", "success");
   };
 
-  // 10. Session Operations: Export & Import JSON
+  // 10. Session Operations: Export & Import JSON / HTML Snapshot
+  const handleExportOfflineHtml = () => {
+    const fullComments = comments.map((c) => ({
+      ...c,
+      embedding: getCommentEmbedding(c, llmSettings.useCustomEmbedding) || c.embedding,
+    }));
+
+    const htmlString = generateSelfContainedOfflineHtml({
+      comments: fullComments,
+      stakeholderMappings,
+      executiveSummary,
+      synthesisHistory,
+      similarityThreshold: filters.similarityThreshold,
+    });
+
+    const blob = new Blob([htmlString], {
+      type: "text/html;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `feedback_analysis_snapshot_${new Date().toISOString().split('T')[0]}.html`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Exported self-contained offline HTML snapshot! Open in any browser.", "success");
+  };
+
   const handleExportSession = () => {
     const fullComments = comments.map((c) => ({
       ...c,
@@ -1914,6 +1942,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
                     setIsSynthesisModalOpen(true);
                   }}
                   historyCount={synthesisHistory.length}
+                  onExportOfflineHtml={handleExportOfflineHtml}
                 />
               )}
 
@@ -1922,6 +1951,7 @@ Format your response using beautiful, structured Markdown. Make it professional 
                 <ImportExport
                   onImportSession={handleImportSession}
                   onExportSession={handleExportSession}
+                  onExportOfflineHtml={handleExportOfflineHtml}
                   onImportCSV={handleImportCSV}
                   onStartIndexing={handleStartIndexing}
                   isIndexing={isIndexing}

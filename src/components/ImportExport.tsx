@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import Papa from "papaparse";
 import { CommentItem } from "../types";
-import { Upload, Download, FileSpreadsheet, FileJson, AlertCircle, HelpCircle, Loader2 } from "lucide-react";
+import { Upload, Download, FileSpreadsheet, FileJson, AlertCircle, HelpCircle, Loader2, Globe, FileCode2 } from "lucide-react";
 import { clusterCommentsDynamically } from "../utils/topicClustering";
 
 interface ImportExportProps {
@@ -11,6 +11,7 @@ interface ImportExportProps {
     executiveSummary: string | null;
   }) => void;
   onExportSession: () => void;
+  onExportOfflineHtml: () => void;
   onImportCSV: (newComments: CommentItem[]) => void;
   onStartIndexing: (
     texts: string[],
@@ -22,6 +23,7 @@ interface ImportExportProps {
 export const ImportExport: React.FC<ImportExportProps> = ({
   onImportSession,
   onExportSession,
+  onExportOfflineHtml,
   onImportCSV,
   onStartIndexing,
   isIndexing,
@@ -533,23 +535,43 @@ export const ImportExport: React.FC<ImportExportProps> = ({
             <Download className="w-4 h-4 text-[#1A1A1A]" /> Export Session Hub
           </h2>
           <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-            Preserve your complete diagnostic layout. Downloading the session file allows you to re-import it anytime to restore charts, clusters, deduplication audits, and report write-ups.
+            Preserve and share your complete diagnostic snapshot. Generate a standalone self-contained HTML dashboard or save raw session state for re-importing.
           </p>
 
-          <div className="border border-[#E5E3DF] rounded-none p-5 bg-[#F9F8F6] flex flex-col gap-3 text-center items-center justify-center h-32">
-            <FileJson className="w-6 h-6 text-[#1A1A1A]" />
-            <span className="text-[10px] text-gray-500 uppercase tracking-wide leading-relaxed">
-              Save vectors, custom topic labels, archived duplicates, and text structures.
-            </span>
+          <div className="space-y-3">
+            <div className="border border-[#4A6741]/30 rounded-none p-4 bg-[#F4F7F3] flex flex-col gap-2">
+              <div className="flex items-center gap-2 font-bold text-xs text-[#2D4526]">
+                <Globe className="w-4 h-4 text-[#4A6741]" />
+                <span>Standalone Interactive HTML Dashboard</span>
+              </div>
+              <span className="text-[10px] text-gray-600 leading-relaxed">
+                Generates a fully self-contained offline HTML file with interactive tabs, live dataset filtering, stakeholder matrix, custom topic clusters, and synthesis reports. Perfect for sharing with stakeholders!
+              </span>
+              <button
+                onClick={onExportOfflineHtml}
+                className="w-full mt-2 py-2.5 bg-[#4A6741] hover:bg-[#3D5535] text-white font-bold text-[10px] uppercase tracking-widest rounded-none flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+              >
+                <FileCode2 className="w-4 h-4 text-emerald-200" /> Export Offline HTML Snapshot (.html)
+              </button>
+            </div>
+
+            <div className="border border-[#E5E3DF] rounded-none p-4 bg-[#F9F8F6] flex flex-col gap-2">
+              <div className="flex items-center gap-2 font-bold text-xs text-[#1A1A1A]">
+                <FileJson className="w-4 h-4 text-[#1A1A1A]" />
+                <span>Raw Application Session Data (.json)</span>
+              </div>
+              <span className="text-[10px] text-gray-500 leading-relaxed">
+                Save raw vector embeddings, custom topic labels, archived duplicates, and text structures to re-import into this application later.
+              </span>
+              <button
+                onClick={onExportSession}
+                className="w-full mt-2 py-2 border border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] font-bold text-[10px] uppercase tracking-widest rounded-none flex items-center justify-center gap-2 transition-all bg-white cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> Export Session JSON (.json)
+              </button>
+            </div>
           </div>
         </div>
-
-        <button
-          onClick={onExportSession}
-          className="w-full mt-6 py-3 border border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] font-bold text-[10px] uppercase tracking-widest rounded-none flex items-center justify-center gap-2 transition-all bg-white cursor-pointer"
-        >
-          <Download className="w-4 h-4" /> Export Complete Session (.json)
-        </button>
       </div>
     </div>
   );

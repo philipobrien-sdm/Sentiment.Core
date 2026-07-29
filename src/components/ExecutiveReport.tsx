@@ -1,6 +1,6 @@
 import React from "react";
 import { CommentItem } from "../types";
-import { Sparkles, FileText, Download, Loader2, ArrowRight, History } from "lucide-react";
+import { Sparkles, FileText, Download, Loader2, ArrowRight, History, Globe } from "lucide-react";
 import { MarkdownViewer } from "./MarkdownViewer";
 
 interface ExecutiveReportProps {
@@ -11,6 +11,7 @@ interface ExecutiveReportProps {
   apiMode: 'live' | 'demo';
   onOpenHistory?: () => void;
   historyCount?: number;
+  onExportOfflineHtml?: () => void;
 }
 
 export const ExecutiveReport: React.FC<ExecutiveReportProps> = ({
@@ -21,6 +22,7 @@ export const ExecutiveReport: React.FC<ExecutiveReportProps> = ({
   apiMode,
   onOpenHistory,
   historyCount = 0,
+  onExportOfflineHtml,
 }) => {
   const activeComments = comments.filter((c) => !c.isArchived);
 
@@ -68,12 +70,25 @@ export const ExecutiveReport: React.FC<ExecutiveReportProps> = ({
           )}
 
           {executiveSummary && (
-            <button
-              onClick={handleExportReport}
-              className="px-3 py-1.5 border border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] rounded-none text-[10px] uppercase tracking-widest font-semibold flex items-center gap-1.5 transition-colors bg-white cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" /> Export Synthesis
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportReport}
+                className="px-3 py-1.5 border border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] rounded-none text-[10px] uppercase tracking-widest font-semibold flex items-center gap-1.5 transition-colors bg-white cursor-pointer"
+                title="Export report markdown text"
+              >
+                <Download className="w-3.5 h-3.5" /> Export MD
+              </button>
+
+              {onExportOfflineHtml && (
+                <button
+                  onClick={onExportOfflineHtml}
+                  className="px-3 py-1.5 bg-[#4A6741] hover:bg-[#3D5535] text-white rounded-none text-[10px] uppercase tracking-widest font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                  title="Export complete standalone offline HTML dashboard snapshot with mappings, clusters, reports, and dataset"
+                >
+                  <Globe className="w-3.5 h-3.5 text-emerald-200" /> Export Offline HTML
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
