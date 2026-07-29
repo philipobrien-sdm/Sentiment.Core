@@ -179,7 +179,7 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
             const sentimentHeader = headers.find((h) => h.toLowerCase().includes("sentiment"));
             const topicHeader = headers.find((h) => {
               const lower = h.toLowerCase();
-              return lower.includes("topic") || lower.includes("category") || lower.includes("theme");
+              return lower.includes("topic") || lower.includes("category") || lower.includes("theme") || lower.includes("cluster");
             });
             const idHeader = headers.find((h) => {
               const lower = h.toLowerCase();
@@ -255,9 +255,9 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
               else if (negScore > posScore) sentiment = 'negative';
             }
 
-            let topic = "General Feedback";
-            if (selectedTopicField && row[selectedTopicField]) {
-              topic = row[selectedTopicField];
+            let topic = "";
+            if (selectedTopicField && row[selectedTopicField] && String(row[selectedTopicField]).trim()) {
+              topic = String(row[selectedTopicField]).trim();
             }
 
             const parsedId = selectedIdField && row[selectedIdField] ? String(row[selectedIdField]).trim() : "";
@@ -335,9 +335,9 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
           else if (negScore > posScore) sentiment = 'negative';
         }
 
-        let topic = "General Feedback";
-        if (selectedTopicField && row[selectedTopicField]) {
-          topic = row[selectedTopicField];
+        let topic = "";
+        if (selectedTopicField && row[selectedTopicField] && String(row[selectedTopicField]).trim()) {
+          topic = String(row[selectedTopicField]).trim();
         }
 
         const parsedId = selectedIdField && row[selectedIdField] ? String(row[selectedIdField]).trim() : "";

@@ -15,6 +15,8 @@ export interface CommentItem {
   originalRowData?: Record<string, string>; // Holds all columns from the uploaded CSV
   originalId?: string;
   organizationName?: string;
+  clusterConfidence?: number; // Similarity/Confidence score for primary cluster assignment (0.0 to 1.0)
+  secondaryTopics?: { topic: string; confidence: number }[]; // Secondary cluster matches >= 50%
 }
 
 export interface DuplicateGroup {

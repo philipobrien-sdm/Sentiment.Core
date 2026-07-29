@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { 
   FolderKanban, Sparkles, Filter, Search, Download, 
   CheckCircle2, ArrowUpDown, Tag, Building2, Smile, Frown, Meh,
-  RefreshCw, Loader2, Info, ChevronRight, Layers, FileSpreadsheet, Check
+  RefreshCw, Loader2, Info, ChevronRight, Layers, FileSpreadsheet, Check, HelpCircle, Layers2
 } from "lucide-react";
 import { CommentItem, LlmSettings, StakeholderMapping } from "../types";
 import { OrganizationBadge } from "./OrganizationBadge";
@@ -22,13 +22,18 @@ interface CustomTopicClusterViewProps {
 
 interface ClusteredCommentItem extends CommentItem {
   assignedTopic: string;
-  similarityScore: number;
+  similarityScore: number; // Confidence score for primary topic (0.0 to 1.0)
+  isPreAssigned: boolean;  // True if preserved from existing file cluster entry, false if newly assigned
+  secondaryTopics: { topic: string; confidence: number }[]; // Secondary topic matches above threshold
 }
 
 interface ClusterGroup {
   topicName: string;
   comments: ClusteredCommentItem[];
   avgSimilarity: number;
+  preAssignedCount: number;
+  autoMappedCount: number;
+  secondaryMatchesCount: number;
   sentimentCounts: {
     positive: number;
     neutral: number;
@@ -55,11 +60,44 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
   showToast,
   onSelectComment
 }) => {
-  // Topic input state (newline or comma separated or raw text)
-  const [topicInputText, setTopicInputText] = useState<string>(DEFAULT_PRESET_TOPICS.join("\n"));
+  // Extract unique existing cluster column entries from uploaded dataset
+  const existingClusterEntries = useMemo(() => {
+    const topicsSet = new Set<string>();
+    comments.forEach(c => {
+      const t = c.topic?.trim();
+      if (
+        t && 
+        t !== "" && 
+        t !== "Unassigned" && 
+        t !== "Unassigned / General" && 
+        t !== "Unassigned / Low Confidence" && 
+        t !== "General Feedback"
+      ) {
+        topicsSet.add(t);
+      }
+    });
+    return Array.from(topicsSet).sort();
+  }, [comments]);
+
+  // Topic input state (initialized with uploaded file clusters if present, or preset defaults)
+  const [topicInputText, setTopicInputText] = useState<string>(
+    existingClusterEntries.length > 0 
+      ? existingClusterEntries.join("\n") 
+      : DEFAULT_PRESET_TOPICS.join("\n")
+  );
+
+  // Sync uploaded file cluster list when new file/comments arrive
+  useEffect(() => {
+    if (existingClusterEntries.length > 0) {
+      setTopicInputText(existingClusterEntries.join("\n"));
+    }
+  }, [existingClusterEntries]);
   
-  // Cutoff similarity threshold (default 0 = best-match assignment)
+  // Cutoff similarity threshold for blank entries
   const [minThreshold, setMinThreshold] = useState<number>(0.0);
+
+  // Secondary cluster threshold (retain any matches >= 50% default)
+  const [secondaryThreshold, setSecondaryThreshold] = useState<number>(0.50);
 
   // Clustering execution state
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -73,8 +111,30 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
   // Table filters & sorting within selected cluster
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sentimentFilter, setSentimentFilter] = useState<'all' | 'positive' | 'neutral' | 'negative'>('all');
-  const [sortField, setSortField] = useState<'score' | 'id' | 'org' | 'sentiment'>('score');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'file' | 'auto' | 'has_secondary'>('all');
+  const [sortField, setSortField] = useState<'score' | 'id' | 'org' | 'sentiment' | 'source' | 'secondary_count'>('score');
   const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
+
+  // Count assigned vs blank comments in active dataset
+  const activeDatasetStats = useMemo(() => {
+    const active = comments.filter(c => !c.isArchived && c.id !== "user_query_node");
+    const assignedCount = active.filter(c => {
+      const t = c.topic?.trim();
+      return (
+        t && 
+        t !== "" && 
+        t !== "Unassigned" && 
+        t !== "Unassigned / General" && 
+        t !== "Unassigned / Low Confidence" && 
+        t !== "General Feedback"
+      );
+    }).length;
+    return {
+      total: active.length,
+      assignedCount,
+      blankCount: active.length - assignedCount
+    };
+  }, [comments]);
 
   // Parse candidate topic strings
   const parsedTopics = useMemo(() => {
@@ -84,7 +144,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
       .filter(t => t.length > 0);
   }, [topicInputText]);
 
-  // Execute Embedding Clustering
+  // Execute Embedding Evaluation: Primary Assignment + Secondary Assignments (>= 50%)
   const handleRunClustering = async () => {
     const topicsToCluster = parsedTopics;
     if (topicsToCluster.length === 0) {
@@ -100,11 +160,11 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
     setIsProcessing(true);
 
     try {
-      // 1. Compute/Fetch Vector Embeddings for each defined Topic
+      // 1. Compute/Fetch Vector Embeddings for each defined target Topic
       let topicEmbeddings: number[][] = [];
 
       if (llmSettings.useCustomEmbedding) {
-        showToast("Fetching topic embeddings from local LLM endpoint...", "info");
+        showToast("Fetching topic embeddings from LLM endpoint...", "info");
         topicEmbeddings = await fetchLocalEmbeddings(topicsToCluster, llmSettings);
       } else {
         topicEmbeddings = topicsToCluster.map(t => getDeterministicPseudoEmbedding(t));
@@ -116,7 +176,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
         vector: topicEmbeddings[idx] || getDeterministicPseudoEmbedding(topicName)
       }));
 
-      // 2. Classify each comment to its nearest topic vector
+      // 2. Process comments
       const activeComments = comments.filter(c => !c.isArchived && c.id !== "user_query_node");
       
       const groupsMap = new Map<string, ClusteredCommentItem[]>();
@@ -126,41 +186,85 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
 
       for (const comment of activeComments) {
         const commentVec = getCommentEmbedding(comment, llmSettings.useCustomEmbedding);
-        
-        let bestTopic = "";
-        let maxSimilarity = -1;
+        const rawTopic = comment.topic?.trim() || "";
 
-        if (commentVec && commentVec.length > 0) {
-          for (const tv of topicVectors) {
-            const sim = calculateCosineSimilarity(commentVec, tv.vector);
-            if (sim > maxSimilarity) {
-              maxSimilarity = sim;
-              bestTopic = tv.topicName;
-            }
+        const isPreAssigned =
+          !!rawTopic &&
+          rawTopic !== "" &&
+          rawTopic !== "Unassigned" &&
+          rawTopic !== "Unassigned / General" &&
+          rawTopic !== "Unassigned / Low Confidence" &&
+          rawTopic !== "General Feedback";
+
+        // Evaluate similarity score across ALL topics for multi-assignment retention
+        const allSimilarities = topicVectors.map(tv => {
+          let sim = 0;
+          if (commentVec && commentVec.length > 0 && tv.vector && tv.vector.length > 0) {
+            sim = calculateCosineSimilarity(commentVec, tv.vector);
+          }
+          return {
+            topic: tv.topicName,
+            confidence: Math.min(1.0, Math.max(0.0, sim))
+          };
+        }).sort((a, b) => b.confidence - a.confidence);
+
+        let primaryTopic = "";
+        let primaryConfidence = 0;
+
+        if (isPreAssigned) {
+          // RULE: Primary assignment is initially set via cluster column text if present
+          primaryTopic = rawTopic;
+          const foundSim = allSimilarities.find(s => s.topic.toLowerCase() === primaryTopic.toLowerCase());
+          primaryConfidence = foundSim ? foundSim.confidence : 0.88; // Default baseline if topic vector wasn't in input
+        } else {
+          // RULE: For blank entries, top vector similarity match becomes primary assignment
+          const topMatch = allSimilarities[0];
+          if (topMatch && topMatch.confidence >= minThreshold) {
+            primaryTopic = topMatch.topic;
+            primaryConfidence = topMatch.confidence;
+          } else {
+            primaryTopic = "Unassigned / Low Confidence";
+            primaryConfidence = topMatch ? topMatch.confidence : 0;
           }
         }
 
+        // RULE: Retain list of potential secondary assignments where similarity match >= secondaryThreshold (50%)
+        const secondaryTopics = allSimilarities.filter(s => 
+          s.topic.toLowerCase() !== primaryTopic.toLowerCase() && 
+          s.confidence >= secondaryThreshold
+        );
+
         const clusteredItem: ClusteredCommentItem = {
           ...comment,
-          assignedTopic: maxSimilarity >= minThreshold ? bestTopic : "Unassigned / Low Confidence",
-          similarityScore: maxSimilarity > -1 ? maxSimilarity : 0
+          assignedTopic: primaryTopic,
+          similarityScore: primaryConfidence,
+          isPreAssigned,
+          clusterConfidence: primaryConfidence,
+          secondaryTopics
         };
 
-        if (maxSimilarity >= minThreshold && bestTopic) {
-          const list = groupsMap.get(bestTopic) || [];
-          list.push(clusteredItem);
-          groupsMap.set(bestTopic, list);
-        } else {
+        if (primaryTopic === "Unassigned / Low Confidence") {
           unassigned.push(clusteredItem);
+        } else {
+          if (!groupsMap.has(primaryTopic)) {
+            groupsMap.set(primaryTopic, []);
+          }
+          groupsMap.get(primaryTopic)!.push(clusteredItem);
         }
       }
 
-      // 3. Build cluster group metrics
-      const constructedGroups: ClusterGroup[] = topicsToCluster.map(topicName => {
+      // 3. Build cluster group metrics across all present topics
+      const allGroupTopics = Array.from(new Set([...topicsToCluster, ...Array.from(groupsMap.keys())]));
+
+      const constructedGroups: ClusterGroup[] = allGroupTopics.map(topicName => {
         const groupComments = groupsMap.get(topicName) || [];
         
         const totalSim = groupComments.reduce((acc, c) => acc + c.similarityScore, 0);
         const avgSimilarity = groupComments.length > 0 ? totalSim / groupComments.length : 0;
+
+        const preAssignedCount = groupComments.filter(c => c.isPreAssigned).length;
+        const autoMappedCount = groupComments.filter(c => !c.isPreAssigned).length;
+        const secondaryMatchesCount = groupComments.filter(c => c.secondaryTopics.length > 0).length;
 
         const sentimentCounts = {
           positive: groupComments.filter(c => c.sentiment === "positive").length,
@@ -181,6 +285,9 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
           topicName,
           comments: groupComments,
           avgSimilarity,
+          preAssignedCount,
+          autoMappedCount,
+          secondaryMatchesCount,
           sentimentCounts,
           organizations: Array.from(orgsSet).sort()
         };
@@ -190,7 +297,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
       setUnassignedComments(unassigned);
       setHasRunClustering(true);
 
-      // Default dropdown selection to topic with highest count or first topic
+      // Default dropdown selection to first group with comments or first topic
       const nonZeroGroup = constructedGroups.find(g => g.comments.length > 0) || constructedGroups[0];
       if (nonZeroGroup) {
         setSelectedTopic(nonZeroGroup.topicName);
@@ -198,7 +305,10 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
         setSelectedTopic("Unassigned / Low Confidence");
       }
 
-      showToast(`Grouped ${activeComments.length} comments across ${topicsToCluster.length} custom topics using vector similarity!`, "success");
+      showToast(
+        `Multi-topic evaluation complete: Preserved primary file clusters & retained secondary matches ≥${(secondaryThreshold * 100).toFixed(0)}%!`, 
+        "success"
+      );
     } catch (error: any) {
       console.error("Clustering error:", error);
       showToast(`Clustering failed: ${error.message || "Unknown error"}`, "error");
@@ -207,7 +317,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
     }
   };
 
-  // Run initial clustering on mount if not run yet
+  // Run initial evaluation on mount if not run yet
   useEffect(() => {
     if (!hasRunClustering && comments.length > 0) {
       handleRunClustering();
@@ -231,6 +341,9 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
         topicName: "Unassigned / Low Confidence",
         comments: unassignedComments,
         avgSimilarity: unassignedComments.length > 0 ? unassignedComments.reduce((acc, c) => acc + c.similarityScore, 0) / unassignedComments.length : 0,
+        preAssignedCount: unassignedComments.filter(c => c.isPreAssigned).length,
+        autoMappedCount: unassignedComments.filter(c => !c.isPreAssigned).length,
+        secondaryMatchesCount: unassignedComments.filter(c => c.secondaryTopics.length > 0).length,
         sentimentCounts,
         organizations: Array.from(orgsSet)
       };
@@ -251,7 +364,8 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
         const idStr = (c.originalId || c.id || "").toLowerCase();
         const orgStr = (c.organizationName || c.originalRowData?.["Organization"] || "").toLowerCase();
         const textStr = (c.text || "").toLowerCase();
-        return idStr.includes(query) || orgStr.includes(query) || textStr.includes(query);
+        const secondaries = (c.secondaryTopics || []).map(s => s.topic.toLowerCase()).join(" ");
+        return idStr.includes(query) || orgStr.includes(query) || textStr.includes(query) || secondaries.includes(query);
       });
     }
 
@@ -260,11 +374,22 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
       list = list.filter(c => c.sentiment === sentimentFilter);
     }
 
+    // Source filter (File Assigned vs Auto Mapped vs Has Secondary)
+    if (sourceFilter === "file") {
+      list = list.filter(c => c.isPreAssigned);
+    } else if (sourceFilter === "auto") {
+      list = list.filter(c => !c.isPreAssigned);
+    } else if (sourceFilter === "has_secondary") {
+      list = list.filter(c => c.secondaryTopics.length > 0);
+    }
+
     // Sorting
     list.sort((a, b) => {
       let comparison = 0;
       if (sortField === "score") {
         comparison = b.similarityScore - a.similarityScore;
+      } else if (sortField === "secondary_count") {
+        comparison = b.secondaryTopics.length - a.secondaryTopics.length;
       } else if (sortField === "id") {
         const idA = a.originalId || a.id || "";
         const idB = b.originalId || b.id || "";
@@ -275,44 +400,60 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
         comparison = orgA.localeCompare(orgB);
       } else if (sortField === "sentiment") {
         comparison = a.sentiment.localeCompare(b.sentiment);
+      } else if (sortField === "source") {
+        comparison = (a.isPreAssigned ? 1 : 0) - (b.isPreAssigned ? 1 : 0);
       }
 
       return sortDirection === "desc" ? comparison : -comparison;
     });
 
     return list;
-  }, [currentGroup, searchQuery, sentimentFilter, sortField, sortDirection]);
+  }, [currentGroup, searchQuery, sentimentFilter, sourceFilter, sortField, sortDirection]);
 
-  // Apply custom cluster topic assignments back to main dataset
+  // Apply custom cluster topic assignments and secondary topics back to main dataset
   const handleApplyToMainDataset = () => {
     if (!hasRunClustering || clusterGroups.length === 0) {
-      showToast("Please run clustering first before applying to the main dataset.", "error");
+      showToast("Please evaluate clusters first before applying to the main dataset.", "error");
       return;
     }
 
-    // Map each comment ID to its newly assigned topic
-    const topicMap = new Map<string, string>();
+    // Map each comment ID to its evaluated primary topic, confidence score, and secondary topics
+    const topicMap = new Map<string, { topic: string; confidence: number; secondaryTopics: { topic: string; confidence: number }[] }>();
     clusterGroups.forEach(g => {
       g.comments.forEach(c => {
-        topicMap.set(c.id, g.topicName);
+        topicMap.set(c.id, { 
+          topic: g.topicName, 
+          confidence: c.similarityScore,
+          secondaryTopics: c.secondaryTopics || []
+        });
       });
     });
     unassignedComments.forEach(c => {
-      topicMap.set(c.id, "Unassigned / General");
+      topicMap.set(c.id, { 
+        topic: "Unassigned / General", 
+        confidence: c.similarityScore,
+        secondaryTopics: c.secondaryTopics || []
+      });
     });
 
     const updated = comments.map(c => {
       if (topicMap.has(c.id)) {
-        return { ...c, topic: topicMap.get(c.id)! };
+        const info = topicMap.get(c.id)!;
+        return { 
+          ...c, 
+          topic: info.topic,
+          clusterConfidence: info.confidence,
+          secondaryTopics: info.secondaryTopics
+        };
       }
       return c;
     });
 
     onApplyTopicsToDataset(updated);
-    showToast("Applied custom cluster topics to the active dataset!", "success");
+    showToast("Applied primary & secondary topic assignments to active dataset!", "success");
   };
 
-  // Export selected cluster or all clusters to CSV
+  // Export selected cluster or all clusters to CSV with secondary topics
   const handleExportCSV = (exportAll: boolean = false) => {
     let rowsToExport: ClusteredCommentItem[] = [];
 
@@ -328,7 +469,16 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
       return;
     }
 
-    const headers = ["Comment_ID", "Organization_Name", "Feedback_Text", "Sentiment", "Assigned_Cluster_Topic", "Vector_Match_Score"];
+    const headers = [
+      "Comment_ID", 
+      "Organization_Name", 
+      "Feedback_Text", 
+      "Sentiment", 
+      "Primary_Cluster_Topic", 
+      "Assignment_Source", 
+      "Primary_Confidence_Score",
+      "Secondary_Cluster_Matches"
+    ];
     
     const csvContent = [
       headers.join(","),
@@ -337,10 +487,15 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
         const org = c.organizationName || c.originalRowData?.["Organization"] || c.originalRowData?.["Org"] || "N/A";
         const text = `"${(c.text || "").replace(/"/g, '""')}"`;
         const sentiment = c.sentiment;
-        const topic = `"${(c.assignedTopic || "").replace(/"/g, '""')}"`;
-        const score = (c.similarityScore * 100).toFixed(1) + "%";
+        const primaryTopic = `"${(c.assignedTopic || "").replace(/"/g, '""')}"`;
+        const source = c.isPreAssigned ? "File Assigned" : "Auto Mapped";
+        const confidence = (c.similarityScore * 100).toFixed(1) + "%";
+        
+        const secondariesStr = c.secondaryTopics && c.secondaryTopics.length > 0
+          ? `"${c.secondaryTopics.map(s => `${s.topic} (${(s.confidence * 100).toFixed(0)}%)`).join("; ").replace(/"/g, '""')}"`
+          : '""';
 
-        return [id, `"${org.replace(/"/g, '""')}"`, text, sentiment, topic, score].join(",");
+        return [id, `"${org.replace(/"/g, '""')}"`, text, sentiment, primaryTopic, source, confidence, secondariesStr].join(",");
       })
     ].join("\n");
 
@@ -353,7 +508,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
     link.click();
     document.body.removeChild(link);
 
-    showToast(`Exported ${rowsToExport.length} rows to CSV!`, "success");
+    showToast(`Exported ${rowsToExport.length} rows with secondary topic matches to CSV!`, "success");
   };
 
   // Helper to add preset topic
@@ -366,18 +521,18 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       
-      {/* 1. TOPIC DEFINITION & EMBEDDING CLUSTERING CONTROLS */}
+      {/* 1. TOPIC DEFINITION & MULTI-ASSIGNMENT BANNER */}
       <div className="bg-white border border-[#E5E3DF] p-5 space-y-4 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-[#E5E3DF] pb-3">
           <div>
             <div className="flex items-center gap-2">
               <FolderKanban className="w-5 h-5 text-[#4A6741]" />
               <h3 className="font-serif italic text-lg font-bold text-[#1A1A1A]">
-                Custom Embedding Topic Clustering
+                Multi-Topic Cluster Evaluation
               </h3>
             </div>
-            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-              Define target cluster topics. High-dimensional vector similarity automatically maps each comment to its nearest semantic topic, capturing original IDs, Organization names, Comments, and Sentiment.
+            <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+              <strong>Multi-Topic Logic:</strong> Primary cluster is assigned via file text (or top match for blank rows). All other topic matches with similarity score ≥ 50% are retained as <strong>Secondary Cluster Matches</strong>.
             </p>
           </div>
 
@@ -390,16 +545,40 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
               {isProcessing ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-[#4A6741]" />
-                  <span>Grouping via Vectors...</span>
+                  <span>Evaluating Clusters...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5 text-[#4A6741]" />
-                  <span>Group Comments by Topics</span>
+                  <span>Evaluate Multi-Topic Clusters</span>
                 </>
               )}
             </button>
           </div>
+        </div>
+
+        {/* Dataset Cluster Status Chips */}
+        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          <span className="text-[10px] font-mono uppercase font-bold text-gray-500">
+            Dataset Status:
+          </span>
+          <span className="px-2.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-900 text-[10px] font-mono font-bold flex items-center gap-1.5">
+            <FileSpreadsheet className="w-3 h-3 text-blue-600" />
+            <span>{activeDatasetStats.assignedCount} Primary File-Assigned</span>
+          </span>
+          <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-900 text-[10px] font-mono font-bold flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-emerald-600" />
+            <span>{activeDatasetStats.blankCount} Blank Entries (Auto-Assigned)</span>
+          </span>
+          <span className="px-2.5 py-0.5 bg-purple-50 border border-purple-200 text-purple-900 text-[10px] font-mono font-bold flex items-center gap-1.5">
+            <Layers2 className="w-3 h-3 text-purple-600" />
+            <span>Secondary Match Threshold: ≥{(secondaryThreshold * 100).toFixed(0)}%</span>
+          </span>
+          {existingClusterEntries.length > 0 && (
+            <span className="text-[10px] text-gray-500 font-mono ml-auto">
+              ✓ Loaded {existingClusterEntries.length} topic cluster(s) directly from file
+            </span>
+          )}
         </div>
 
         {/* Input area & Presets */}
@@ -408,7 +587,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
           <div className="lg:col-span-2 space-y-2">
             <div className="flex items-center justify-between">
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-600">
-                Target Cluster Topics (One per line or comma-separated)
+                Target Cluster Topics List
               </label>
               <span className="text-[10px] text-gray-400 font-mono">
                 {parsedTopics.length} topic{parsedTopics.length === 1 ? "" : "s"} defined
@@ -417,13 +596,13 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
             <textarea
               value={topicInputText}
               onChange={(e) => setTopicInputText(e.target.value)}
-              placeholder="e.g. Performance & Speed&#10;UI/UX & Layout&#10;Pricing & Subscriptions"
+              placeholder="e.g. Zoning & Transit&#10;Public Safety&#10;Park Facilities"
               rows={4}
               className="w-full bg-[#F9F8F6] border border-[#E5E3DF] p-3 text-xs focus:outline-none focus:border-[#1A1A1A] font-sans leading-relaxed rounded-none resize-none"
             />
           </div>
 
-          {/* Quick preset chips & settings */}
+          {/* Quick preset chips & Threshold Sliders */}
           <div className="space-y-3 bg-[#F9F8F6]/60 border border-[#E5E3DF] p-3.5">
             <span className="block text-[10px] font-bold uppercase tracking-widest text-gray-500">
               Quick Add Presets
@@ -449,23 +628,42 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
               })}
             </div>
 
-            <div className="pt-2 border-t border-[#E5E3DF] space-y-1">
-              <div className="flex justify-between text-[10px] font-semibold text-gray-600">
-                <span>Min Similarity Cutoff:</span>
-                <span className="font-mono text-[#4A6741]">{(minThreshold * 100).toFixed(0)}%</span>
+            {/* Threshold Sliders */}
+            <div className="pt-2 border-t border-[#E5E3DF] space-y-2">
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-semibold text-gray-600">
+                  <span>Secondary Match Cutoff:</span>
+                  <span className="font-mono text-purple-700 font-bold">{(secondaryThreshold * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.30"
+                  max="0.80"
+                  step="0.05"
+                  value={secondaryThreshold}
+                  onChange={(e) => setSecondaryThreshold(parseFloat(e.target.value))}
+                  className="w-full accent-purple-700 cursor-pointer"
+                />
+                <p className="text-[9px] text-gray-400 leading-tight">
+                  Retains secondary topic assignments if match confidence is ≥ {(secondaryThreshold * 100).toFixed(0)}%.
+                </p>
               </div>
-              <input
-                type="range"
-                min="0.0"
-                max="0.6"
-                step="0.05"
-                value={minThreshold}
-                onChange={(e) => setMinThreshold(parseFloat(e.target.value))}
-                className="w-full accent-[#4A6741] cursor-pointer"
-              />
-              <p className="text-[9px] text-gray-400 leading-tight">
-                Comments below cutoff default to "Unassigned". Leave at 0% for nearest-neighbor mapping.
-              </p>
+
+              <div className="space-y-1 pt-1 border-t border-[#E5E3DF]/60">
+                <div className="flex justify-between text-[10px] font-semibold text-gray-600">
+                  <span>Blank Entry Min Cutoff:</span>
+                  <span className="font-mono text-[#4A6741]">{(minThreshold * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.0"
+                  max="0.6"
+                  step="0.05"
+                  value={minThreshold}
+                  onChange={(e) => setMinThreshold(parseFloat(e.target.value))}
+                  className="w-full accent-[#4A6741] cursor-pointer"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -479,7 +677,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
           <div className="bg-[#1A1A1A] text-white p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border-l-4 border-[#4A6741]">
             <div className="flex-1 space-y-1">
               <label className="block text-[9px] font-mono text-gray-400 uppercase tracking-widest font-bold">
-                Select Cluster Topic View
+                Select Primary Cluster Topic View
               </label>
               
               <div className="flex items-center gap-3">
@@ -490,18 +688,18 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                 >
                   {clusterGroups.map((group) => (
                     <option key={group.topicName} value={group.topicName}>
-                      {group.topicName} ({group.comments.length} comment{group.comments.length === 1 ? "" : "s"})
+                      {group.topicName} ({group.comments.length} primary item{group.comments.length === 1 ? "" : "s"})
                     </option>
                   ))}
                   {unassignedComments.length > 0 && (
                     <option value="Unassigned / Low Confidence">
-                      Unassigned / Low Confidence ({unassignedComments.length} comment{unassignedComments.length === 1 ? "" : "s"})
+                      Unassigned / Low Confidence ({unassignedComments.length} item{unassignedComments.length === 1 ? "" : "s"})
                     </option>
                   )}
                 </select>
 
                 <span className="hidden sm:inline-block text-xs font-mono text-gray-300">
-                  {currentGroup ? `${currentGroup.comments.length} records mapped` : ""}
+                  {currentGroup ? `${currentGroup.comments.length} items (${currentGroup.secondaryMatchesCount} with secondary tags)` : ""}
                 </span>
               </div>
             </div>
@@ -511,7 +709,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
               <button
                 onClick={handleApplyToMainDataset}
                 className="px-3.5 py-2 bg-[#4A6741] hover:bg-[#3D5535] text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
-                title="Apply these custom cluster topic labels across all tabs"
+                title="Apply primary & secondary cluster assignments across all tabs"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Apply to Dataset</span>
@@ -520,7 +718,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
               <button
                 onClick={() => handleExportCSV(false)}
                 className="px-3 py-2 border border-white/20 hover:bg-white/10 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
-                title="Export this cluster to CSV"
+                title="Export this cluster with secondary topic matches to CSV"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Export Cluster</span>
@@ -529,7 +727,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
               <button
                 onClick={() => handleExportCSV(true)}
                 className="px-3 py-2 border border-white/20 hover:bg-white/10 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
-                title="Export all custom clusters to CSV"
+                title="Export all custom clusters with secondary matches to CSV"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-green-400" />
                 <span>Export All</span>
@@ -540,10 +738,10 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
           {/* Cluster Summary Metrics Dashboard */}
           {currentGroup && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Card 1: Total Volume */}
+              {/* Card 1: Total Volume & Source Breakdown */}
               <div className="bg-white border border-[#E5E3DF] p-3.5 space-y-1">
                 <span className="text-[9px] uppercase font-mono tracking-wider font-bold text-gray-400 block">
-                  Cluster Comment Volume
+                  Primary Cluster Volume
                 </span>
                 <div className="flex items-baseline justify-between">
                   <span className="text-2xl font-bold text-[#1A1A1A]">
@@ -553,21 +751,29 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                     {comments.length > 0 ? ((currentGroup.comments.length / comments.length) * 100).toFixed(1) : 0}% of dataset
                   </span>
                 </div>
+                <div className="flex items-center justify-between text-[10px] font-mono text-gray-500 pt-1 border-t border-[#E5E3DF]">
+                  <span className="text-blue-800 font-medium">📁 {currentGroup.preAssignedCount} File Assigned</span>
+                  <span className="text-emerald-800 font-medium">✨ {currentGroup.autoMappedCount} Auto Mapped</span>
+                </div>
               </div>
 
-              {/* Card 2: Vector Match Strength */}
+              {/* Card 2: Secondary Cross-Matches in this Cluster */}
               <div className="bg-white border border-[#E5E3DF] p-3.5 space-y-1">
-                <span className="text-[9px] uppercase font-mono tracking-wider font-bold text-gray-400 block">
-                  Avg Vector Match Score
+                <span className="text-[9px] uppercase font-mono tracking-wider font-bold text-purple-800 block flex items-center gap-1">
+                  <Layers2 className="w-3 h-3 text-purple-600" />
+                  Secondary Cluster Matches (≥{(secondaryThreshold * 100).toFixed(0)}%)
                 </span>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-bold text-[#4A6741]">
-                    {(currentGroup.avgSimilarity * 100).toFixed(1)}%
+                  <span className="text-2xl font-bold text-purple-900">
+                    {currentGroup.secondaryMatchesCount}
                   </span>
-                  <span className="text-xs text-gray-400 font-mono">
-                    Cosine Similarity
+                  <span className="text-xs text-purple-700 font-mono font-medium">
+                    {currentGroup.comments.length > 0 ? ((currentGroup.secondaryMatchesCount / currentGroup.comments.length) * 100).toFixed(0) : 0}% multi-topic
                   </span>
                 </div>
+                <p className="text-[10px] text-gray-500 font-mono pt-1 border-t border-[#E5E3DF]">
+                  Items matching additional topics above 50%
+                </p>
               </div>
 
               {/* Card 3: Sentiment Breakdown */}
@@ -584,14 +790,14 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                     <Meh className="w-3 h-3 text-gray-500" />
                     <span>{currentGroup.sentimentCounts.neutral}</span>
                   </span>
-                  <span className="px-2 py-0.5 bg-red-50 text-red-800 border border-red-200 text-[10px] font-bold font-mono flex items-center gap-1">
+                  <span className="px-2 py-0.5 bg-red-50 text-red-800 border border-red-200 text-red-800 text-[10px] font-bold font-mono flex items-center gap-1">
                     <Frown className="w-3 h-3 text-red-600" />
                     <span>{currentGroup.sentimentCounts.negative}</span>
                   </span>
                 </div>
               </div>
 
-              {/* Card 4: Organizations Represented & Stakeholder Power Mapping */}
+              {/* Card 4: Organizations Represented */}
               <div className="bg-white border border-[#E5E3DF] p-3.5 space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[9px] uppercase font-mono tracking-wider font-bold text-gray-400 block">
@@ -646,13 +852,54 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search cluster comments by ID, text, organization..."
+                placeholder="Search by ID, comment text, organization, secondary topics..."
                 className="w-full bg-[#F9F8F6] border border-[#E5E3DF] pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-[#1A1A1A] rounded-none"
               />
             </div>
 
-            {/* Sentiment Filter Pills & Sort Dropdown */}
+            {/* Source Filter, Sentiment Filter & Sort */}
             <div className="flex items-center gap-2 overflow-x-auto shrink-0">
+              
+              {/* Assignment Source & Secondary Filter */}
+              <div className="flex border border-[#E5E3DF] bg-[#F9F8F6] p-0.5 text-[10px]">
+                <button
+                  onClick={() => setSourceFilter('all')}
+                  className={`px-2 py-1 font-semibold uppercase tracking-wider cursor-pointer ${
+                    sourceFilter === 'all' ? "bg-[#1A1A1A] text-white" : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  All Rows
+                </button>
+                <button
+                  onClick={() => setSourceFilter('file')}
+                  className={`px-2 py-1 font-semibold uppercase tracking-wider cursor-pointer flex items-center gap-1 ${
+                    sourceFilter === 'file' ? "bg-blue-800 text-white" : "text-blue-800 hover:bg-blue-50"
+                  }`}
+                >
+                  <FileSpreadsheet className="w-2.5 h-2.5" />
+                  <span>File Assigned</span>
+                </button>
+                <button
+                  onClick={() => setSourceFilter('auto')}
+                  className={`px-2 py-1 font-semibold uppercase tracking-wider cursor-pointer flex items-center gap-1 ${
+                    sourceFilter === 'auto' ? "bg-emerald-800 text-white" : "text-emerald-800 hover:bg-emerald-50"
+                  }`}
+                >
+                  <Sparkles className="w-2.5 h-2.5" />
+                  <span>Auto Mapped</span>
+                </button>
+                <button
+                  onClick={() => setSourceFilter('has_secondary')}
+                  className={`px-2 py-1 font-semibold uppercase tracking-wider cursor-pointer flex items-center gap-1 ${
+                    sourceFilter === 'has_secondary' ? "bg-purple-800 text-white" : "text-purple-800 hover:bg-purple-50"
+                  }`}
+                >
+                  <Layers2 className="w-2.5 h-2.5" />
+                  <span>Has Secondary Topics</span>
+                </button>
+              </div>
+
+              {/* Sentiment Filter Pills */}
               <div className="flex border border-[#E5E3DF] bg-[#F9F8F6] p-0.5 text-[10px]">
                 {(['all', 'positive', 'neutral', 'negative'] as const).map((sent) => (
                   <button
@@ -677,7 +924,9 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                   onChange={(e) => setSortField(e.target.value as any)}
                   className="bg-transparent text-[11px] font-semibold text-gray-700 focus:outline-none cursor-pointer"
                 >
-                  <option value="score">Sort by Vector Match</option>
+                  <option value="score">Sort by Primary Confidence</option>
+                  <option value="secondary_count">Sort by Secondary Topic Count</option>
+                  <option value="source">Sort by Assignment Source</option>
                   <option value="id">Sort by Comment ID</option>
                   <option value="org">Sort by Organization</option>
                   <option value="sentiment">Sort by Sentiment</option>
@@ -700,16 +949,17 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                 <thead>
                   <tr className="bg-[#F9F8F6] border-b border-[#E5E3DF] text-[9px] uppercase font-mono tracking-widest text-gray-500 font-bold">
                     <th className="py-3 px-4 w-28">Comment ID</th>
-                    <th className="py-3 px-4 w-44">Organization</th>
-                    <th className="py-3 px-4">Comment Text</th>
-                    <th className="py-3 px-4 w-28">Sentiment</th>
-                    <th className="py-3 px-4 w-32 text-right">Vector Match</th>
+                    <th className="py-3 px-4 w-40">Organization</th>
+                    <th className="py-3 px-4">Feedback Comment Text</th>
+                    <th className="py-3 px-4 w-60">Primary & Secondary Clusters</th>
+                    <th className="py-3 px-4 w-24">Sentiment</th>
+                    <th className="py-3 px-4 w-32 text-right">Confidence Score</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E5E3DF]">
                   {filteredClusterComments.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center text-gray-400 space-y-2">
+                      <td colSpan={6} className="py-12 text-center text-gray-400 space-y-2">
                         <Info className="w-6 h-6 mx-auto text-gray-300" />
                         <p className="text-xs font-serif italic">No comment rows found matching the filter criteria in this cluster topic.</p>
                       </td>
@@ -719,6 +969,9 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                       const commentIdDisplay = comment.originalId || comment.id;
                       const orgNameDisplay = comment.organizationName || comment.originalRowData?.["Organization"] || comment.originalRowData?.["Org"] || comment.originalRowData?.["Organization Name"] || "—";
                       
+                      const confPercent = (comment.similarityScore * 100).toFixed(1);
+                      const confVal = comment.similarityScore * 100;
+
                       return (
                         <tr 
                           key={comment.id}
@@ -759,6 +1012,46 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                             )}
                           </td>
 
+                          {/* Primary & Secondary Clusters Column */}
+                          <td className="py-3.5 px-4 align-top space-y-1.5">
+                            {/* Primary Cluster Badge */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px] font-mono uppercase font-bold text-gray-400 shrink-0">Primary:</span>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#1A1A1A] text-white text-[10px] font-bold font-sans">
+                                <span>{comment.assignedTopic}</span>
+                                {comment.isPreAssigned && (
+                                  <span className="text-[8px] bg-blue-500 text-white px-1 font-mono uppercase">File</span>
+                                )}
+                              </span>
+                            </div>
+
+                            {/* Secondary Cluster Tags (>= 50%) */}
+                            {comment.secondaryTopics && comment.secondaryTopics.length > 0 ? (
+                              <div className="space-y-1 pt-0.5">
+                                <span className="text-[9px] font-mono uppercase font-bold text-purple-700 block">
+                                  Secondary Matches (≥{(secondaryThreshold * 100).toFixed(0)}%):
+                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {comment.secondaryTopics.map((sec) => (
+                                    <span 
+                                      key={sec.topic}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-900 border border-purple-200 text-[9.5px] font-mono font-medium"
+                                      title={`Similarity match: ${(sec.confidence * 100).toFixed(1)}%`}
+                                    >
+                                      <Tag className="w-2.5 h-2.5 text-purple-600" />
+                                      <span>{sec.topic}</span>
+                                      <span className="font-bold text-purple-700">({(sec.confidence * 100).toFixed(0)}%)</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-[9px] text-gray-400 font-mono italic block pt-0.5">
+                                No secondary topics ≥{(secondaryThreshold * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </td>
+
                           {/* Sentiment Column */}
                           <td className="py-3.5 px-4 align-top whitespace-nowrap">
                             {comment.sentiment === "positive" && (
@@ -781,18 +1074,25 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
                             )}
                           </td>
 
-                          {/* Vector Match Score Column */}
+                          {/* Primary Confidence Score Column */}
                           <td className="py-3.5 px-4 text-right align-top whitespace-nowrap">
                             <div className="inline-flex flex-col items-end">
-                              <span className="font-mono font-bold text-xs text-[#4A6741]">
-                                {(comment.similarityScore * 100).toFixed(1)}% Match
+                              <span className={`font-mono font-bold text-xs ${
+                                confVal >= 80 ? "text-[#4A6741]" : confVal >= 60 ? "text-amber-700" : "text-gray-600"
+                              }`}>
+                                {confPercent}%
                               </span>
-                              <div className="w-16 bg-gray-100 h-1 mt-1 overflow-hidden">
+                              <div className="w-20 bg-gray-100 h-1.5 mt-1 overflow-hidden">
                                 <div 
-                                  className="bg-[#4A6741] h-full" 
-                                  style={{ width: `${Math.min(100, Math.max(0, comment.similarityScore * 100))}%` }}
+                                  className={`h-full ${
+                                    confVal >= 80 ? "bg-[#4A6741]" : confVal >= 60 ? "bg-amber-500" : "bg-gray-400"
+                                  }`} 
+                                  style={{ width: `${Math.min(100, Math.max(0, confVal))}%` }}
                                 />
                               </div>
+                              <span className="text-[8px] text-gray-400 font-mono mt-0.5">
+                                {comment.isPreAssigned ? "File Assigned" : "Auto Primary"}
+                              </span>
                             </div>
                           </td>
                         </tr>
@@ -805,8 +1105,8 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
 
             {/* Table Footer */}
             <div className="p-3 bg-[#F9F8F6] border-t border-[#E5E3DF] flex justify-between items-center text-[10px] font-mono text-gray-500">
-              <span>Showing {filteredClusterComments.length} of {currentGroup.comments.length} rows in topic cluster</span>
-              <span>Vector Similarity Engine • {llmSettings.useCustomEmbedding ? llmSettings.embeddingModel : "Deterministic Embeddings"}</span>
+              <span>Showing {filteredClusterComments.length} of {currentGroup.comments.length} items in cluster ({currentGroup.preAssignedCount} file-assigned, {currentGroup.autoMappedCount} auto-mapped, {currentGroup.secondaryMatchesCount} with secondary tags)</span>
+              <span>Vector Multi-Assignment Engine • {llmSettings.useCustomEmbedding ? llmSettings.embeddingModel : "Deterministic Embeddings"}</span>
             </div>
           </div>
 
