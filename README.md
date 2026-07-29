@@ -2,7 +2,7 @@
 
 A comprehensive, high-performance, full-stack visual analytics application designed to ingest customer comments, public consultation feedback, support tickets, and survey datasets. It converts feedback into high-dimensional text embeddings, provides interactive 2D spatial visualization, performs semantic searches, deduplicates records, and generates stakeholder-prioritized AI executive syntheses.
 
-Built with an **Express + Vite + React (TypeScript)** architecture, it features an offline-first workflow, client-side vector calculations, custom topic clustering, a Stakeholder Power-Interest Matrix, and seamless local LLM integration (Ollama, LM Studio, OpenAI-compatible APIs).
+Built with an **Express + Vite + React (TypeScript)** architecture, it features an offline-first workflow, client-side vector calculations, custom topic clustering, a Stakeholder Power-Interest Matrix, standalone HTML snapshot exporting, and seamless local LLM integration (Ollama, LM Studio, OpenAI-compatible APIs).
 
 ---
 
@@ -28,10 +28,12 @@ Built with an **Express + Vite + React (TypeScript)** architecture, it features 
 * **Automated Batch Heuristics:** Automatically discover organizations across the dataset and apply initial quadrant classifications.
 * **Priority-Weighted Synthesis:** Incorporates stakeholder priority weights directly into AI synthesis prompts, ensuring Key Player concerns are front-and-center in executive reports.
 
-### 🏷️ 4. Dynamic Topic Clustering & Custom Topic Manager
+### 🏷️ 4. Dynamic Topic Clustering, Custom Workbench & Cluster Synthesis
 * **Automatic & Algorithmic Clustering:** Group feedback by semantic themes using vector distance algorithms and LLM analysis.
 * **Custom Cluster Workbench:** Create custom topic tags, reclassify individual or batched comments, merge related themes, rename topics, or delete obsolete categories.
-* **Export Custom Taxonomies:** Download refined, re-clustered feedback datasets with updated topic metadata in CSV or JSON formats.
+* **Secondary Topic Tagging:** Detects cross-cutting themes matching secondary topics at ≥50% confidence.
+* **Cluster-Specific Qualitative AI Synthesis:** Synthesize individual custom clusters to generate focused report critiques featuring prepended stakeholder lists, core friction themes, sentiment breakdowns, and appended CSV traceability rows.
+* **Export Custom Taxonomies:** Download refined, re-clustered feedback datasets with updated topic metadata and secondary tags in CSV or JSON formats.
 
 ### 🔍 5. Semantic Query Engine
 * **Natural Language Vector Search:** Input any natural language query statement (e.g., *"usability friction during checkout"* or *"transit route delay complaints"*).
@@ -51,9 +53,15 @@ Built with an **Express + Vite + React (TypeScript)** architecture, it features 
   3. **Top Recurring Issues & Common Themes** (Key friction points and positive request clusters)
   4. **Strategic Action Plan** (Actionable bullet points prioritized by stakeholder impact)
   5. **Traceability Section** (Direct row index citations linking conclusions back to original CSV records)
-* **Synthesis History:** Save, review, copy, or download generated reports at any time.
+* **Synthesis History Hub:** Save, review, copy, or download generated executive and cluster reports at any time.
 
-### 🗄️ 8. Flexible LLM & Local Vector Embedding Integration
+### 🌐 8. Standalone Offline HTML Export Snapshot
+* **Self-Contained HTML Dashboard Export:** Export a complete, interactive, offline-ready HTML document (`.html`) containing the entire session snapshot.
+* **Zero Dependencies:** Recipients can open the exported HTML file in any modern web browser without internet connection, web servers, or installed software.
+* **Interactive Navigation:** Features tabbed views for Executive Reports, Stakeholder Power-Interest Matrix, Dataset Explorer with live keyword & sentiment filters, and Synthesis Reports Hub.
+* **Embedded Session Restoration:** Embeds the raw session data payload directly inside the HTML file with a one-click button to download raw JSON and restore full state in the web application.
+
+### 🗄️ 9. Flexible LLM & Local Vector Embedding Integration
 * **Dual Embedding Modes:**
   * **Built-in Heuristics:** High-speed pseudo-embedding engine for instant testing without external dependencies or API keys.
   * **Local Custom LLM Proxy:** Integrates with local embedding models (*Ollama, LM Studio, Llama.cpp, OpenAI-compatible APIs*) via the backend CORS proxy (`/api/proxy-llm`).

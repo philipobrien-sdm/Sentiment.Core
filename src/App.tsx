@@ -25,7 +25,8 @@ import {
   testLlmConnection,
   generateLocalHeuristicNeighborhoodSynthesis,
   generateLocalHeuristicClusterSynthesis,
-  generateLocalHeuristicRefinedNodesSynthesis
+  generateLocalHeuristicRefinedNodesSynthesis,
+  generateLocalHeuristicMetaExecutiveReview
 } from "./utils/localLlm";
 import { MarkdownViewer } from "./components/MarkdownViewer";
 import { generateSelfContainedOfflineHtml } from "./utils/exportOfflineHtml";
@@ -93,6 +94,7 @@ export default function App() {
   const [isSynthesisModalOpen, setIsSynthesisModalOpen] = useState<boolean>(false);
   const [activeSynthesis, setActiveSynthesis] = useState<SavedSynthesis | null>(null);
   const [isAnalyzingClusterId, setIsAnalyzingClusterId] = useState<string | null>(null);
+  const [isSynthesizingMeta, setIsSynthesizingMeta] = useState<boolean>(false);
   const [synthesisHistory, setSynthesisHistory] = useState<SavedSynthesis[]>(() => {
     const saved = localStorage.getItem("synthesis_history");
     if (saved) {
@@ -809,6 +811,63 @@ Format your response using beautiful, structured Markdown. Make it professional 
     } finally {
       setIsAnalyzingSemanticQuery(false);
     }
+  };
+
+  // Perform factual executive meta-review of syntheses done to date
+  const handlePerformMetaReview = async () => {
+    if (synthesisHistory.length === 0) {
+      showToast("No synthesis reports recorded in history yet.", "error");
+      return;
+    }
+
+    setIsSynthesizingMeta(true);
+    let reviewMarkdown = "";
+
+    const structuredPrompt = `You are a senior executive auditor. Perform a comprehensive critical executive review pulling together the information from the following ${synthesisHistory.length} synthesis report(s) generated to date.
+
+CRITICAL CONSTRAINTS & GUARANTEES:
+1. DO NOT fabricate new data, numbers, or assumptions not present in the provided reports.
+2. DO NOT hallucinate or extrapolate facts. Remain 100% factual and grounded exclusively in the text of the existing syntheses.
+3. Combine, harmonize, and critically review the findings, stakeholder concerns, and action items already established in these reports into a cohesive executive meta-review.
+
+--- EXISTING SYNTHESES TO AUDIT & SYNTHESIZE ---
+${synthesisHistory.map((item, idx) => `REPORT #${idx + 1}: "${item.title}" (${item.timestamp}) [Source: ${item.source || 'General'}]\n${item.markdown}\n`).join("\n\n")}
+
+--- OUTPUT FORMAT ---
+Respond using clean, structured markdown with the following headers:
+# Critical Executive Review of Prior Syntheses
+## 1. Meta-Executive Summary & Audit Scope
+## 2. Consolidated Core Findings & Themes
+## 3. Cross-Cutting Stakeholder Impact
+## 4. Unified Prioritized Action Plan
+## 5. Audit Traceability Log`;
+
+    try {
+      try {
+        reviewMarkdown = await fetchLocalCompletion(structuredPrompt, llmSettings);
+        showToast("Executive meta-review compiled via LLM!", "success");
+      } catch (innerErr) {
+        console.warn("Local model query failed, using client-side deterministic meta-review.", innerErr);
+        reviewMarkdown = generateLocalHeuristicMetaExecutiveReview(synthesisHistory);
+        showToast("Compiled client-side executive review of existing syntheses.", "info");
+      }
+    } catch (err: any) {
+      reviewMarkdown = generateLocalHeuristicMetaExecutiveReview(synthesisHistory);
+    } finally {
+      setIsSynthesizingMeta(false);
+    }
+
+    const newMetaItem: SavedSynthesis = {
+      id: `meta_review_${Date.now()}`,
+      title: `Executive Review of Syntheses (${synthesisHistory.length} Reports)`,
+      markdown: reviewMarkdown,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString(),
+      source: "meta"
+    };
+
+    setSynthesisHistory((prev) => [newMetaItem, ...prev]);
+    setActiveSynthesis(newMetaItem);
+    setIsSynthesisModalOpen(true);
   };
 
   // 6. Action: Add a manual single comment
@@ -2029,6 +2088,8 @@ Format your response using beautiful, structured Markdown. Make it professional 
           setSynthesisHistory([]);
           setActiveSynthesis(null);
         }}
+        onPerformMetaReview={handlePerformMetaReview}
+        isSynthesizingMeta={isSynthesizingMeta}
       />
 
       {/* About & Embeddings Explainer Modal */}

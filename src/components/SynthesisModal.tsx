@@ -1,13 +1,13 @@
 import React from "react";
 import { MarkdownViewer } from "./MarkdownViewer";
-import { X, Calendar, Sparkles, Copy, Download, Trash2, Clock, Map, Layers } from "lucide-react";
+import { X, Calendar, Sparkles, Copy, Download, Trash2, Clock, Map, Layers, FileCheck2 } from "lucide-react";
 
 export interface SavedSynthesis {
   id: string;
   title: string;
   markdown: string;
   timestamp: string;
-  source: "map" | "cluster";
+  source: "map" | "cluster" | "meta" | string;
 }
 
 interface SynthesisModalProps {
@@ -18,6 +18,8 @@ interface SynthesisModalProps {
   onSelectHistoryItem: (item: SavedSynthesis) => void;
   onDeleteHistoryItem: (id: string) => void;
   onClearHistory: () => void;
+  onPerformMetaReview?: () => void;
+  isSynthesizingMeta?: boolean;
 }
 
 export const SynthesisModal: React.FC<SynthesisModalProps> = ({
@@ -28,6 +30,8 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
   onSelectHistoryItem,
   onDeleteHistoryItem,
   onClearHistory,
+  onPerformMetaReview,
+  isSynthesizingMeta = false,
 }) => {
   if (!isOpen) return null;
 
@@ -58,32 +62,61 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
             <Sparkles className="w-5 h-5 text-amber-400" />
             <div>
               <h2 className="font-serif italic text-lg leading-none">LLM Critical Synthesis Hub</h2>
-              <p className="text-[9px] text-gray-400 uppercase tracking-widest font-mono mt-1">Advanced Vector-Semantic Auditing</p>
+              <p className="text-[9px] text-gray-400 uppercase tracking-widest font-mono mt-1">Advanced Vector-Semantic Auditing &amp; Meta-Analysis</p>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-1 hover:bg-white/10 text-gray-300 hover:text-white transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-3">
+            {history.length > 0 && onPerformMetaReview && (
+              <button
+                onClick={onPerformMetaReview}
+                disabled={isSynthesizingMeta}
+                className="px-3 py-1.5 bg-amber-900/80 hover:bg-amber-800 border border-amber-700 text-amber-100 text-[10px] font-mono uppercase tracking-wider font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                title="Perform a critical executive review pulling together information from all syntheses done to date without creating new data"
+              >
+                <Sparkles className={`w-3.5 h-3.5 text-amber-300 ${isSynthesizingMeta ? "animate-spin" : ""}`} />
+                <span>{isSynthesizingMeta ? "Reviewing Syntheses..." : "Executive Review of Syntheses"}</span>
+              </button>
+            )}
+
+            <button 
+              onClick={onClose}
+              className="p-1 hover:bg-white/10 text-gray-300 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal body (Two-column layout) */}
         <div className="flex-1 flex overflow-hidden min-h-0">
           
           {/* Left Panel: Saved Summaries History */}
-          <div className="hidden md:flex w-72 bg-[#F9F8F6] border-r border-[#E5E3DF] flex-col shrink-0">
-            <div className="p-4 border-b border-[#E5E3DF] flex items-center justify-between shrink-0">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#1A1A1A] flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-gray-400" /> Synthesis History ({history.length})
-              </span>
-              {history.length > 0 && (
+          <div className="hidden md:flex w-80 bg-[#F9F8F6] border-r border-[#E5E3DF] flex-col shrink-0">
+            <div className="p-4 border-b border-[#E5E3DF] space-y-2.5 shrink-0">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#1A1A1A] flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-gray-400" /> Synthesis History ({history.length})
+                </span>
+                {history.length > 0 && (
+                  <button
+                    onClick={onClearHistory}
+                    className="text-[9px] font-mono uppercase text-[#A13D2D] hover:underline cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+
+              {history.length > 0 && onPerformMetaReview && (
                 <button
-                  onClick={onClearHistory}
-                  className="text-[9px] font-mono uppercase text-[#A13D2D] hover:underline cursor-pointer"
+                  onClick={onPerformMetaReview}
+                  disabled={isSynthesizingMeta}
+                  className="w-full py-2 px-3 bg-[#2D1B0D] hover:bg-[#3D2513] text-amber-200 border border-amber-800 text-[10px] font-mono uppercase tracking-wider font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                  title="Perform a critical executive review pulling together information from existing syntheses done to date without creating new data"
                 >
-                  Clear All
+                  <FileCheck2 className={`w-3.5 h-3.5 text-amber-400 ${isSynthesizingMeta ? "animate-spin" : ""}`} />
+                  <span>{isSynthesizingMeta ? "Reviewing..." : "Executive Review of Syntheses"}</span>
                 </button>
               )}
             </div>
@@ -97,7 +130,7 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
               ) : (
                 history.map((item) => {
                   const isActive = activeSynthesis?.id === item.id;
-                  const Icon = item.source === "map" ? Map : Layers;
+                  const Icon = item.source === "map" ? Map : item.source === "meta" ? Sparkles : Layers;
                   return (
                     <div
                       key={item.id}
@@ -108,7 +141,7 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
                           : "bg-[#F9F8F6] border-[#E5E3DF] hover:bg-white hover:border-gray-400"
                       }`}
                     >
-                      <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${isActive ? "text-[#4A6741]" : "text-gray-400"}`} />
+                      <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${isActive ? (item.source === "meta" ? "text-amber-600" : "text-[#4A6741]") : "text-gray-400"}`} />
                       <div className="flex-1 min-w-0 pr-6">
                         <p className={`text-xs font-bold leading-snug truncate ${isActive ? "text-[#1A1A1A]" : "text-gray-700"}`}>
                           {item.title}
@@ -146,9 +179,11 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
                       <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 uppercase tracking-wider ${
                         activeSynthesis.source === "map" 
                           ? "bg-blue-50 border border-blue-200 text-blue-600" 
+                          : activeSynthesis.source === "meta"
+                          ? "bg-amber-100 border border-amber-300 text-amber-900 font-bold"
                           : "bg-purple-50 border border-purple-200 text-purple-600"
                       }`}>
-                        {activeSynthesis.source === "map" ? "Semantic Neighborhood" : "Deduplication Cluster"}
+                        {activeSynthesis.source === "map" ? "Semantic Neighborhood" : activeSynthesis.source === "meta" ? "Executive Meta-Review" : "Deduplication Cluster"}
                       </span>
                       <span className="text-[10px] text-gray-400 font-mono">{activeSynthesis.timestamp}</span>
                     </div>
@@ -181,11 +216,21 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
               </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-gray-400">
-                <Sparkles className="w-8 h-8 mb-3 text-gray-300" />
-                <h4 className="font-serif italic text-lg text-[#1A1A1A] mb-1">No critique active</h4>
-                <p className="text-xs max-w-sm leading-relaxed text-gray-400">
-                  Select a past report from the history sidebar, or trigger a new critical synthesis from the Similarity Plot or Deduplication tabs.
+                <Sparkles className="w-8 h-8 mb-3 text-amber-500" />
+                <h4 className="font-serif italic text-lg text-[#1A1A1A] mb-1">Critical Synthesis Hub</h4>
+                <p className="text-xs max-w-sm leading-relaxed text-gray-500 mb-4">
+                  Select a past report from history, or perform a factual executive review pulling together information from all syntheses done to date.
                 </p>
+                {history.length > 0 && onPerformMetaReview && (
+                  <button
+                    onClick={onPerformMetaReview}
+                    disabled={isSynthesizingMeta}
+                    className="px-4 py-2 bg-[#2D1B0D] hover:bg-[#3D2513] text-amber-200 border border-amber-800 text-xs font-mono uppercase tracking-wider font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm disabled:opacity-50"
+                  >
+                    <FileCheck2 className={`w-4 h-4 text-amber-400 ${isSynthesizingMeta ? "animate-spin" : ""}`} />
+                    <span>{isSynthesizingMeta ? "Synthesizing Existing Reports..." : "Perform Executive Review of Syntheses"}</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -193,12 +238,12 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
         </div>
 
         {/* Footer (mobile only view of history toggle, or standard close bar) */}
-        <div className="bg-[#F9F8F6] border-t border-[#E5E3DF] px-6 py-3.5 flex justify-end gap-2.5 shrink-0">
-          {/* Small helper for mobile screens */}
-          <div className="mr-auto flex items-center gap-1.5 text-[10px] font-medium text-gray-500 md:hidden">
-            <span className="h-1.5 w-1.5 bg-green-500 rounded-full" />
-            Saved history counts: {history.length}
+        <div className="bg-[#F9F8F6] border-t border-[#E5E3DF] px-6 py-3.5 flex items-center justify-between gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 text-[10px] font-mono text-gray-500">
+            <span className="h-2 w-2 bg-amber-500 rounded-full" />
+            <span>Factual Audit Mode: Pulls exclusively from existing reports to prevent hallucinated data.</span>
           </div>
+
           <button
             onClick={onClose}
             className="px-5 py-2 bg-[#1A1A1A] hover:bg-[#1A1A1A]/90 text-white font-mono text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-colors"
@@ -211,3 +256,4 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
     </div>
   );
 };
+
