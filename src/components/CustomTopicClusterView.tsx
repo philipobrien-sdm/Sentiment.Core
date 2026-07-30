@@ -367,6 +367,7 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
     timestamp: string;
   } | null>(null);
   const [isSynthesisExpanded, setIsSynthesisExpanded] = useState<boolean>(true);
+  const [includeProposedResponses, setIncludeProposedResponses] = useState<boolean>(true);
 
   // Batch Cluster Synthesis Modal & Runner State
   const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
@@ -379,6 +380,24 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
   });
   const cancelBatchRef = React.useRef<boolean>(false);
 
+  // Batch Answer Comments Engine State
+  const [isBatchAnswerModalOpen, setIsBatchAnswerModalOpen] = useState<boolean>(false);
+  const [batchAnswerRole, setBatchAnswerRole] = useState<string>("Policy Analyst");
+  const [batchAnswerOverwrite, setBatchAnswerOverwrite] = useState<boolean>(false);
+  const [isBatchAnsweringRunning, setIsBatchAnsweringRunning] = useState<boolean>(false);
+  const [batchAnswerProgress, setBatchAnswerProgress] = useState<{
+    current: number;
+    total: number;
+    currentCommentText: string;
+    stage: 'synthesis' | 'answering';
+  }>({
+    current: 0,
+    total: 0,
+    currentCommentText: "",
+    stage: 'synthesis'
+  });
+  const cancelBatchAnswerRef = React.useRef<boolean>(false);
+
   // Inline Proposed Response Editor State for Table Rows
   const [activeResponseCommentId, setActiveResponseCommentId] = useState<string | null>(null);
   const [inlineResponseText, setInlineResponseText] = useState<string>("");
@@ -386,11 +405,20 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
   const [isDraftingInlineAI, setIsDraftingInlineAI] = useState<boolean>(false);
 
   // Reusable core synthesis builder for a single ClusterGroup
-  const generateGroupSynthesisMarkdown = async (group: ClusterGroup): Promise<string> => {
+  const generateGroupSynthesisMarkdown = async (group: ClusterGroup, includeProposed: boolean = includeProposedResponses): Promise<string> => {
     const groupComments = group.comments;
     const docContextBlock = buildDocumentContextPromptBlock(groupComments);
     const prependedStakeholderList = buildStakeholderListMarkdown(groupComments, stakeholderMappings);
     const appendedCsvTraceabilityRows = buildCsvTraceabilityRowsMarkdown(groupComments);
+
+    const commentsWithResponses = groupComments.filter(c => c.proposedResponse && c.proposedResponse.trim().length > 0);
+    let proposedResponsesBlock = "";
+    if (includeProposed && commentsWithResponses.length > 0) {
+      proposedResponsesBlock = `\nDrafted Proposed Official Responses Currently On File (${commentsWithResponses.length}/${groupComments.length} comments):
+${commentsWithResponses.map((c, i) => `[Comment ${i+1}] ID: ${c.originalId || c.id} (Org: "${c.organizationName || "N/A"}")
+  - Original Feedback: "${c.text}"
+  - Proposed Response (${c.proposedResponseBy || 'Policy Analyst'}): "${c.proposedResponse}"`).join("\n")}\n`;
+    }
 
     const structuredPrompt = `You are a Senior Strategic Customer Experience Auditor & Product Director.
 Analyze the following cluster of ${groupComments.length} stakeholder feedback comments grouped under the custom topic cluster "${group.topicName}".
@@ -401,7 +429,7 @@ Cluster Details:
 - Total Comments in Cluster: ${groupComments.length} (${group.preAssignedCount} file-assigned, ${group.autoMappedCount} vector auto-assigned)
 - Sentiment Breakdown: ${group.sentimentCounts.positive} Positive, ${group.sentimentCounts.neutral} Neutral, ${group.sentimentCounts.negative} Negative
 - Represented Organizations (${group.organizations.length}): ${group.organizations.slice(0, 8).join(", ") || "General Public"}
-
+${proposedResponsesBlock}
 Representative Feedback Comments in this Cluster:
 ${groupComments.slice(0, 30).map((c, i) => `[Comment ${i+1}] ID: ${c.originalId || c.id} (Org: "${c.organizationName || "N/A"}", Sentiment: "${c.sentiment.toUpperCase()}", Source: "${c.isPreAssigned ? "File Assigned" : "Auto Primary"}"${c.documentReference ? `, Ref: "${c.documentReference}"` : ""}): "${c.text}"${c.secondaryTopics && c.secondaryTopics.length > 0 ? ` (Secondary Tags: ${c.secondaryTopics.map(s => s.topic).join(", ")})` : ""}`).join("\n")}
 ${groupComments.length > 30 ? `...and ${groupComments.length - 30} more comments in this cluster.` : ""}
@@ -411,7 +439,8 @@ Format your output using clean, professional Markdown headers:
 2. **Key Pain Points & Sentiment Split**: Detailed critique of positive satisfaction vs negative friction drivers.
 3. **Cross-Organization & Stakeholder Nuances**: Key patterns or divergent priorities across affected organizations.
 4. **Secondary Topic Cross-Cutting Analysis**: Insights into overlapping themes identified via secondary topic tags.
-5. **Strategic Product & Action Recommendations**: 3-4 actionable recommendations for product, CX, and engineering teams.`;
+${includeProposed && commentsWithResponses.length > 0 ? `5. **Proposed Official Response Evaluation**: Critical review of existing drafted proposed responses, evaluating their adequacy, alignment with stakeholder intent, and unaddressed gaps.
+6. **Strategic Product & Action Recommendations**: 3-4 actionable recommendations for product, CX, and engineering teams.` : `5. **Strategic Product & Action Recommendations**: 3-4 actionable recommendations for product, CX, and engineering teams.`}`;
 
     let coreMarkdown = "";
     try {
@@ -435,7 +464,7 @@ Format your output using clean, professional Markdown headers:
     showToast(`Synthesizing ${currentGroup.comments.length} comments for cluster "${currentGroup.topicName}"...`, "info");
 
     try {
-      const fullSynthesisMarkdown = await generateGroupSynthesisMarkdown(currentGroup);
+      const fullSynthesisMarkdown = await generateGroupSynthesisMarkdown(currentGroup, includeProposedResponses);
       const timestampStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString();
 
       const synthObj = {
@@ -454,12 +483,150 @@ Format your output using clean, professional Markdown headers:
           source: "cluster"
         });
       }
-      showToast(`Cluster synthesis complete for "${currentGroup.topicName}"!`, "success");
+
+      showToast(`Synthesis report generated for cluster "${currentGroup.topicName}"!`, "success");
     } catch (error: any) {
-      console.error("Cluster synthesis error:", error);
+      console.error("Cluster synthesis failed:", error);
       showToast(`Synthesis failed: ${error.message || "Unknown error"}`, "error");
     } finally {
       setIsSynthesizingCluster(false);
+    }
+  };
+
+  // Batch Cluster Comment Answering Execution Loop
+  const handleRunBatchAnswerCluster = async () => {
+    if (!currentGroup || currentGroup.comments.length === 0 || !onUpdateComment) return;
+
+    setIsBatchAnsweringRunning(true);
+    cancelBatchAnswerRef.current = false;
+
+    try {
+      // Step 1: Ensure Cluster Synthesis Report exists for context
+      let synthesisMarkdown = (activeClusterSynthesis && activeClusterSynthesis.topicName === currentGroup.topicName)
+        ? activeClusterSynthesis.markdown
+        : "";
+
+      if (!synthesisMarkdown) {
+        setBatchAnswerProgress({
+          current: 0,
+          total: 1,
+          currentCommentText: `Generating Cluster Synthesis Report for "${currentGroup.topicName}" context...`,
+          stage: 'synthesis'
+        });
+
+        synthesisMarkdown = await generateGroupSynthesisMarkdown(currentGroup, includeProposedResponses);
+        const timestampStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString();
+
+        const synthObj = {
+          topicName: currentGroup.topicName,
+          markdown: synthesisMarkdown,
+          timestamp: timestampStr
+        };
+        setActiveClusterSynthesis(synthObj);
+        setIsSynthesisExpanded(true);
+
+        if (onSaveSynthesisToHistory) {
+          onSaveSynthesisToHistory({
+            title: `Custom Cluster Synthesis: "${currentGroup.topicName}" (${currentGroup.comments.length} items)`,
+            markdown: synthesisMarkdown,
+            source: "cluster"
+          });
+        }
+      }
+
+      if (cancelBatchAnswerRef.current) {
+        setIsBatchAnsweringRunning(false);
+        showToast("Batch answering cancelled after synthesis step.", "info");
+        return;
+      }
+
+      // Step 2: Determine target comments to answer
+      const targetComments = currentGroup.comments.filter(c => {
+        if (c.isArchived) return false;
+        if (batchAnswerOverwrite) return true;
+        return !c.proposedResponse || c.proposedResponse.trim().length === 0;
+      });
+
+      if (targetComments.length === 0) {
+        showToast("No comments in cluster require responses (or all are already answered).", "info");
+        setIsBatchAnsweringRunning(false);
+        setIsBatchAnswerModalOpen(false);
+        return;
+      }
+
+      setBatchAnswerProgress({
+        current: 0,
+        total: targetComments.length,
+        currentCommentText: targetComments[0].text,
+        stage: 'answering'
+      });
+
+      let answeredCount = 0;
+
+      for (let i = 0; i < targetComments.length; i++) {
+        if (cancelBatchAnswerRef.current) break;
+
+        const comment = targetComments[i];
+        setBatchAnswerProgress({
+          current: i + 1,
+          total: targetComments.length,
+          currentCommentText: comment.text,
+          stage: 'answering'
+        });
+
+        const structuredPrompt = `You are an official ${batchAnswerRole || 'Policy Analyst'} and customer relations lead.
+Draft an official proposed response to an individual stakeholder feedback comment within the topic cluster "${currentGroup.topicName}".
+
+OVERALL CLUSTER SYNTHESIS CONTEXT (Generated for this cluster):
+---
+${synthesisMarkdown}
+---
+
+STAKEHOLDER COMMENT DETAILS:
+- Comment ID: ${comment.originalId || comment.id}
+- Organization: "${comment.organizationName || 'General Public'}"
+- Topic: "${comment.topic}"
+- Sentiment: "${comment.sentiment}"
+${comment.documentReference ? `- Document Reference: "${comment.documentReference}"` : ""}
+- Comment Text: "${comment.text}"
+
+TASK:
+Write a professional, constructive, and empathetic 1-3 sentence official response to this specific stakeholder comment.
+Directly address the user's feedback while maintaining strict alignment with the overall cluster strategic synthesis above. Output ONLY the response text.`;
+
+        let responseText = "";
+        try {
+          responseText = await fetchLocalCompletion(structuredPrompt, llmSettings);
+        } catch (err) {
+          responseText = `Thank you to ${comment.organizationName || 'the stakeholder'} for feedback regarding ${currentGroup.topicName}${comment.documentReference ? ` (${comment.documentReference})` : ''}. We have recorded this perspective and aligned it with our cluster action plan to ensure it is addressed during policy updates.`;
+        }
+
+        const updated: CommentItem = {
+          ...comment,
+          proposedResponse: responseText.trim(),
+          proposedResponseBy: batchAnswerRole.trim() || "Policy Analyst",
+          proposedResponseAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString()
+        };
+
+        onUpdateComment(updated);
+        answeredCount++;
+
+        await new Promise(r => setTimeout(r, 120));
+      }
+
+      setIsBatchAnsweringRunning(false);
+      setIsBatchAnswerModalOpen(false);
+
+      if (!cancelBatchAnswerRef.current) {
+        showToast(`Batch answered ${answeredCount} comments in cluster "${currentGroup.topicName}" using synthesis context!`, "success");
+      } else {
+        showToast(`Batch answering stopped. Answered ${answeredCount} comments before cancellation.`, "info");
+      }
+
+    } catch (err: any) {
+      console.error("Batch answering error:", err);
+      showToast(`Batch answering failed: ${err.message || "Unknown error"}`, "error");
+      setIsBatchAnsweringRunning(false);
     }
   };
 
@@ -883,6 +1050,16 @@ Format your output using clean, professional Markdown headers:
 
             {/* Actions: Apply to Main Dataset, Synthesize Cluster & Export CSV */}
             <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-white/10">
+              <label className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase text-amber-100 bg-white/10 hover:bg-white/20 border border-white/20 px-2.5 py-2 cursor-pointer transition-colors select-none shadow-xs" title="Include existing drafted proposed responses in cluster synthesis report">
+                <input
+                  type="checkbox"
+                  checked={includeProposedResponses}
+                  onChange={(e) => setIncludeProposedResponses(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-amber-400 cursor-pointer"
+                />
+                <span>Include Responses ({currentGroup?.comments.filter(c => c.proposedResponse && c.proposedResponse.trim().length > 0).length || 0})</span>
+              </label>
+
               <button
                 onClick={handleSynthesizeClusterComments}
                 disabled={isSynthesizingCluster || !currentGroup || currentGroup.comments.length === 0}
@@ -900,6 +1077,22 @@ Format your output using clean, professional Markdown headers:
                     <span>Synthesize Cluster</span>
                   </>
                 )}
+              </button>
+
+              <button
+                onClick={() => {
+                  if (!currentGroup || currentGroup.comments.length === 0) {
+                    showToast("No comments in selected cluster to answer.", "error");
+                    return;
+                  }
+                  setIsBatchAnswerModalOpen(true);
+                }}
+                disabled={!currentGroup || currentGroup.comments.length === 0}
+                className="px-3.5 py-2 bg-amber-950 hover:bg-black border border-amber-600/40 text-amber-200 disabled:opacity-50 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                title="Batch answer all comments in this cluster using the cluster synthesis report for context"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Batch Answer Comments</span>
               </button>
 
               <button
@@ -1670,6 +1863,196 @@ Format your output using clean, professional Markdown headers:
                   >
                     <Sparkles className="w-4 h-4 text-amber-300" />
                     <span>Generate {selectedBatchTopics.size} Reports</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* BATCH ANSWER CLUSTER COMMENTS MODAL */}
+      {isBatchAnswerModalOpen && currentGroup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border-2 border-[#1A1A1A] w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl rounded-none">
+            
+            {/* Modal Header */}
+            <div className="bg-[#1A1A1A] text-white p-4 flex items-center justify-between border-b border-gray-800">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h3 className="font-serif italic font-bold text-lg text-white">Batch Answer Cluster Comments</h3>
+                  <p className="text-[10px] font-mono text-gray-400">Generate grounded official proposed responses for comments in cluster "{currentGroup.topicName}"</p>
+                </div>
+              </div>
+              {!isBatchAnsweringRunning && (
+                <button
+                  onClick={() => setIsBatchAnswerModalOpen(false)}
+                  className="text-gray-400 hover:text-white p-1 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 flex-1 overflow-y-auto space-y-4">
+              
+              {/* Batch Running Progress Bar */}
+              {isBatchAnsweringRunning ? (
+                <div className="bg-amber-50 border border-amber-300 p-5 space-y-4">
+                  <div className="flex items-center justify-between text-xs font-mono font-bold text-amber-950">
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-amber-700" />
+                      <span>
+                        {batchAnswerProgress.stage === 'synthesis'
+                          ? "Step 1 of 2: Generating Cluster Synthesis Context..."
+                          : `Step 2 of 2: Answering Comment ${batchAnswerProgress.current} of ${batchAnswerProgress.total}`
+                        }
+                      </span>
+                    </span>
+                    {batchAnswerProgress.stage === 'answering' && (
+                      <span>{Math.round((batchAnswerProgress.current / batchAnswerProgress.total) * 100)}%</span>
+                    )}
+                  </div>
+
+                  <div className="w-full bg-amber-200 h-2.5 overflow-hidden">
+                    <div
+                      className="bg-amber-700 h-full transition-all duration-300"
+                      style={{
+                        width: batchAnswerProgress.stage === 'synthesis'
+                          ? '15%'
+                          : `${(batchAnswerProgress.current / batchAnswerProgress.total) * 100}%`
+                      }}
+                    />
+                  </div>
+
+                  <div className="bg-white p-3 border border-amber-200 font-mono text-xs text-amber-900 leading-relaxed max-h-24 overflow-y-auto">
+                    <strong>Current Action:</strong> {batchAnswerProgress.currentCommentText}
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      onClick={() => {
+                        cancelBatchAnswerRef.current = true;
+                      }}
+                      className="px-4 py-1.5 bg-red-700 hover:bg-red-800 text-white text-xs font-mono uppercase font-bold cursor-pointer"
+                    >
+                      Cancel Batch Answering
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Synthesis Context Status Banner */}
+                  {activeClusterSynthesis && activeClusterSynthesis.topicName === currentGroup.topicName ? (
+                    <div className="bg-emerald-50 border border-emerald-300 p-3.5 flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+                      <div className="text-xs font-sans text-emerald-950">
+                        <strong className="block font-bold">Cluster Synthesis Report Context Ready</strong>
+                        <p className="text-[11px] text-emerald-800 mt-0.5">
+                          Generated at <strong>{activeClusterSynthesis.timestamp}</strong>. Every proposed response will be contextualized using this report to ensure strategic alignment across all comments in this cluster.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-300 p-3.5 flex items-start gap-3">
+                      <Info className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                      <div className="text-xs font-sans text-amber-950">
+                        <strong className="block font-bold">Automatic Pre-Synthesis Step Required</strong>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          No synthesis report currently exists for cluster <strong>"{currentGroup.topicName}"</strong>. Clicking <em>"Start Batch Answering"</em> will run a cluster synthesis report <strong>FIRST at the beginning (once)</strong>, then use that report for context when formulating every comment response.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Settings & Configuration Controls */}
+                  <div className="bg-[#F9F8F6] border border-[#E5E3DF] p-4 space-y-4">
+                    <h4 className="text-xs font-mono font-bold uppercase text-gray-700 border-b border-[#E5E3DF] pb-2">
+                      Response Options & Author Role
+                    </h4>
+
+                    {/* Author Role */}
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-mono font-bold uppercase text-gray-600">
+                        Author / Organization Role Tag
+                      </label>
+                      <input
+                        type="text"
+                        value={batchAnswerRole}
+                        onChange={(e) => setBatchAnswerRole(e.target.value)}
+                        placeholder="e.g. Policy Analyst, CX Lead, Product Manager"
+                        className="w-full bg-white border border-gray-300 px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-amber-800"
+                      />
+                    </div>
+
+                    {/* Overwrite Option */}
+                    <label className="flex items-center gap-2 text-xs font-mono text-gray-800 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={batchAnswerOverwrite}
+                        onChange={(e) => setBatchAnswerOverwrite(e.target.checked)}
+                        className="w-4 h-4 accent-amber-800 cursor-pointer"
+                      />
+                      <span>Overwrite existing responses (Re-answer comments that already have proposed responses)</span>
+                    </label>
+
+                    {/* Inclusion of Proposed Responses in initial synthesis if generated */}
+                    <label className="flex items-center gap-2 text-xs font-mono text-gray-800 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={includeProposedResponses}
+                        onChange={(e) => setIncludeProposedResponses(e.target.checked)}
+                        className="w-4 h-4 accent-amber-800 cursor-pointer"
+                      />
+                      <span>Include existing proposed responses when running synthesis report</span>
+                    </label>
+                  </div>
+
+                  {/* Target Comments Summary Box */}
+                  <div className="border border-gray-200 p-4 bg-gray-50 flex items-center justify-between text-xs font-mono">
+                    <div>
+                      <span className="text-gray-500 block text-[10px] uppercase font-bold">Cluster Response Target</span>
+                      <strong className="text-gray-900 text-sm">
+                        {currentGroup.comments.filter(c => !c.isArchived && (batchAnswerOverwrite || !c.proposedResponse || c.proposedResponse.trim().length === 0)).length} Comments
+                      </strong>
+                      <span className="text-gray-500 text-[10px] block">
+                        out of {currentGroup.comments.length} total comments in "{currentGroup.topicName}"
+                      </span>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-1 border border-emerald-300">
+                        {currentGroup.comments.filter(c => c.proposedResponse && c.proposedResponse.trim().length > 0).length} Already Answered
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            {!isBatchAnsweringRunning && (
+              <div className="bg-[#F9F8F6] border-t border-[#E5E3DF] p-4 flex items-center justify-between">
+                <span className="text-xs font-mono text-gray-500">
+                  Each response will be saved and flagged with <strong>💬 Proposed Response</strong>.
+                </span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setIsBatchAnswerModalOpen(false)}
+                    className="px-4 py-2 border border-[#E5E3DF] text-xs font-mono uppercase font-bold text-gray-700 hover:bg-gray-100 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleRunBatchAnswerCluster}
+                    disabled={currentGroup.comments.filter(c => !c.isArchived && (batchAnswerOverwrite || !c.proposedResponse || c.proposedResponse.trim().length === 0)).length === 0}
+                    className="px-5 py-2 bg-amber-900 hover:bg-black disabled:opacity-50 text-white text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-sm"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                    <span>Start Batch Answering</span>
                   </button>
                 </div>
               </div>
