@@ -55,6 +55,7 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
   const [selectedTopicField, setSelectedTopicField] = useState<string>("");
   const [selectedIdField, setSelectedIdField] = useState<string>("");
   const [selectedOrgField, setSelectedOrgField] = useState<string>("");
+  const [selectedDocRefField, setSelectedDocRefField] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
@@ -189,12 +190,30 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
               const lower = h.toLowerCase();
               return lower.includes("org") || lower.includes("company") || lower.includes("organization") || lower.includes("account");
             });
+            const docRefHeader = headers.find((h) => {
+              const lower = h.toLowerCase();
+              return (
+                lower.includes("doc") ||
+                lower.includes("model") ||
+                lower.includes("section") ||
+                lower.includes("clause") ||
+                lower.includes("ref") ||
+                lower.includes("reference") ||
+                lower.includes("provision") ||
+                lower.includes("requirement") ||
+                lower.includes("policy") ||
+                lower.includes("material") ||
+                lower.includes("spec") ||
+                lower.includes("paragraph")
+              );
+            });
 
             setSelectedTextField(commentHeader || headers[0]);
             setSelectedSentimentField(sentimentHeader || "");
             setSelectedTopicField(topicHeader || "");
             setSelectedIdField(idHeader || "");
             setSelectedOrgField(orgHeader || "");
+            setSelectedDocRefField(docRefHeader || "");
           } else {
             setErrorMessage("The uploaded CSV file is empty.");
           }
@@ -263,6 +282,7 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
             const parsedId = selectedIdField && row[selectedIdField] ? String(row[selectedIdField]).trim() : "";
             const finalId = parsedId || `csv_backup_${idx + 1}_${Math.random().toString(36).substr(2, 4)}`;
             const orgName = selectedOrgField && row[selectedOrgField] ? String(row[selectedOrgField]).trim() : undefined;
+            const docRef = selectedDocRefField && row[selectedDocRefField] ? String(row[selectedDocRefField]).trim() : undefined;
 
             return {
               id: finalId,
@@ -277,6 +297,7 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
               csvRowIndex: idx + 1,
               originalId: parsedId || finalId,
               organizationName: orgName || undefined,
+              documentReference: docRef || undefined,
               originalRowData: row
             };
           });
@@ -343,6 +364,7 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
         const parsedId = selectedIdField && row[selectedIdField] ? String(row[selectedIdField]).trim() : "";
         const finalId = parsedId || `csv_${idx + 1}_${Math.random().toString(36).substr(2, 4)}`;
         const orgName = selectedOrgField && row[selectedOrgField] ? String(row[selectedOrgField]).trim() : undefined;
+        const docRef = selectedDocRefField && row[selectedDocRefField] ? String(row[selectedDocRefField]).trim() : undefined;
 
         return {
           id: finalId,
@@ -357,6 +379,7 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
           csvRowIndex: idx + 1,
           originalId: parsedId || finalId,
           organizationName: orgName || undefined,
+          documentReference: docRef || undefined,
           originalRowData: row
         };
       });
@@ -876,6 +899,23 @@ export const SetupLandingPage: React.FC<SetupLandingPageProps> = ({
                       className="w-full bg-white border border-[#E5E3DF] px-2 py-1.5 rounded-none text-xs focus:outline-none"
                     >
                       <option value="">-- None / No organization data --</option>
+                      {csvPreview.headers.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-amber-800 uppercase tracking-widest mb-1 flex items-center justify-between">
+                      <span>Document Model / Ref / Section Column (Optional)</span>
+                      <span className="text-gray-400 normal-case font-mono text-[9px]">Links to Doc Model Context</span>
+                    </label>
+                    <select
+                      value={selectedDocRefField}
+                      onChange={(e) => setSelectedDocRefField(e.target.value)}
+                      className="w-full bg-amber-50/50 border border-amber-300 px-2 py-1.5 rounded-none text-xs focus:outline-none font-mono text-[#1A1A1A] font-medium"
+                    >
+                      <option value="">-- Auto-detect or omit document reference --</option>
                       {csvPreview.headers.map(h => (
                         <option key={h} value={h}>{h}</option>
                       ))}

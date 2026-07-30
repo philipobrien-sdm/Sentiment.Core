@@ -3,8 +3,6 @@
 A comprehensive, high-performance, full-stack visual analytics application designed to ingest customer feedback, public consultation comments, support tickets, and survey datasets. It transforms qualitative feedback into high-dimensional text embeddings, provides interactive 2D spatial visualization, performs semantic searches, deduplicates records, and generates stakeholder-prioritized, hallucination-free AI executive syntheses.
 
 Built with an **Express + Vite + React (TypeScript)** architecture, it features an offline-first workflow, client-side vector calculations, custom topic clustering, a Stakeholder Power-Interest Matrix, standalone HTML snapshot exporting, and seamless local LLM integration (*Ollama, LM Studio, OpenAI-compatible APIs*).
-<img width="1267" height="679" alt="Screenshot 2026-07-29 144538" src="https://github.com/user-attachments/assets/1f1ba17c-0cba-49c7-bc93-03e95cb8f1ed" />
-
 
 ---
 
@@ -19,27 +17,18 @@ Modern organizations—including public policy makers, SaaS product teams, munic
 4. **Data Privacy & AI Hallucination Risks**: Sending sensitive consultation datasets or confidential customer complaints to public cloud LLMs creates compliance risks. Furthermore, generic AI summaries frequently introduce "hallucinations"—fabricating ungrounded assumptions not present in the source dataset.
 
 ### The Solution:
-This application bridges the gap by combining **spatial vector analytics**, **stakeholder power-interest weighting**, **custom taxonomy clustering**, and **factually grounded local AI synthesis**. It provides a single visual workbench where leaders can explore semantic relationships, audit duplicates, prioritize stakeholder voices, and export executive-ready reports with complete data privacy. 
+This application bridges the gap by combining **spatial vector analytics**, **stakeholder power-interest weighting**, **custom taxonomy clustering**, and **factually grounded local AI synthesis**. It provides a single visual workbench where leaders can explore semantic relationships, audit duplicates, prioritize stakeholder voices, and export executive-ready reports with complete data privacy.
 
 ---
 
 ## 🎯 Key Functionalities
 
 ### 📍 1. Interactive 2D Spatial Vector Canvas
-<img width="1861" height="744" alt="Screenshot 2026-07-29 145117" src="https://github.com/user-attachments/assets/3db07bd0-1f53-42b2-ab27-f8a243892b86" /> 
-..is converted to ..
-<img width="1229" height="725" alt="Screenshot 2026-07-29 144507" src="https://github.com/user-attachments/assets/0861ac5c-ebdb-44a2-be47-6ea3ea27fc6a" />
-
-
 * **High-Dimensional Spatial Projections**: Projects text embeddings onto a responsive 2D coordinate space where semantically similar feedback items visually cluster together.
 * **Dynamic Color Mapping**: Color-code data points instantly by **Sentiment** (*Positive / Neutral / Negative*), **Topic Clusters**, **Organization**, or **Stakeholder Power-Interest Quadrants**.
 * **Interactive Spotlight & Inspector**: Pan, zoom, and hover over data points to inspect text content, match confidence, row index, and organizational metadata in real time.
 
 ### 🏛️ 2. Stakeholder Power-Interest Matrix & Priority Weighting
-
-<img width="1035" height="853" alt="Screenshot 2026-07-29 144735" src="https://github.com/user-attachments/assets/c19b7b7d-baf9-4ae3-ba5a-9c30257bd402" />
-
-
 * **2x2 Strategic Classification**: Classify stakeholder organizations along **Influence (Power)** and **Interest** axes (1.0 to 5.0 scale).
 * **Four Strategic Quadrants**:
   * 🔴 **Key Players** (*High Power, High Interest*) – **2.5x Priority Weight**
@@ -50,9 +39,6 @@ This application bridges the gap by combining **spatial vector analytics**, **st
 * **Priority-Weighted Prompts**: Automatically injects stakeholder priority weights into AI synthesis prompts, ensuring Key Player concerns take precedence in executive summaries.
 
 ### 🏷️ 3. Dynamic Topic Clustering & Custom Workbench
-
-<img width="1227" height="804" alt="Screenshot 2026-07-29 144651" src="https://github.com/user-attachments/assets/5135b33a-f996-423c-9684-6a246fee4c9a" />
-
 * **Algorithmic & AI Clustering**: Automatically group feedback into distinct semantic themes using vector distance algorithms or local LLMs.
 * **Custom Taxonomy Workbench**: Create custom topic tags, reclassify individual or batched comments, merge related themes, rename topics, or delete obsolete categories.
 * **Secondary Topic Matching**: Automatically detects cross-cutting themes that match secondary topics at ≥50% confidence.
@@ -69,9 +55,6 @@ This application bridges the gap by combining **spatial vector analytics**, **st
 * **Audit & Merge Actions**: Inspect duplicate clusters, select primary entries, archive redundant records, and export clean, deduplicated datasets or annotated audit logs.
 
 ### 📊 6. Executive Synthesis & Critical Review Hub
-
-<img width="1037" height="788" alt="Screenshot 2026-07-29 144630" src="https://github.com/user-attachments/assets/d7878e12-2205-4234-9157-0a6ebc50847f" />
-
 * **Stakeholder-Prioritized Reports**: Generates structured Markdown executive reports highlighting critical feedback from top-tier Key Players.
 * **Critical Executive Review**: Perform a factual meta-review across all generated syntheses to date. Summarizes existing conclusions without creating ungrounded external data or hallucinated facts.
 * **Structured Output Sections**:
@@ -80,10 +63,6 @@ This application bridges the gap by combining **spatial vector analytics**, **st
   3. Top Recurring Friction Issues & Positive Feature Requests
   4. Strategic Action Plan (Prioritized by stakeholder impact)
   5. Audit Traceability Matrix (Direct row citations linking findings to source CSV data)
- 
-<img width="574" height="378" alt="Screenshot 2026-07-29 144940" src="https://github.com/user-attachments/assets/a3b7fc9d-52ad-41e5-b48e-9a24b6522865" />
-
- 
 
 ### 🌐 7. Standalone Offline HTML Export Snapshot
 * **Self-Contained HTML Dashboard Export**: Export a complete, interactive, offline-ready HTML document (`.html`) containing the entire session snapshot.
@@ -92,9 +71,6 @@ This application bridges the gap by combining **spatial vector analytics**, **st
 * **Embedded Session Restoration**: Embeds the raw session data payload directly inside the HTML file with a one-click button to restore state in the main application.
 
 ### 🗄️ 8. Flexible Local LLM & Offline-First Engine
-
-<img width="859" height="833" alt="Screenshot 2026-07-29 144429" src="https://github.com/user-attachments/assets/58ecc0ba-34e2-4769-bc87-604ed71c0546" />
-
 * **Dual Embedding Modes**:
   * **Built-in Heuristics**: High-speed pseudo-embedding engine for instant testing without external dependencies or API keys.
   * **Local Custom LLM Proxy**: Integrates with local embedding models (*Ollama, LM Studio, Llama.cpp, OpenAI-compatible APIs*) via the backend CORS proxy (`/api/proxy-llm`).
