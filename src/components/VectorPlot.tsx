@@ -656,7 +656,7 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Active Legend Filter status badge (if active) */}
           {activeLegendFilter && (
             <div className="flex items-center gap-2 bg-amber-50 text-amber-950 border border-amber-300 px-2.5 py-1 text-[10px] font-mono font-bold uppercase">
@@ -716,7 +716,7 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
       {/* Canvas Graphical Representation Area */}
       <div
         ref={containerRef}
-        className="relative flex-1 bg-[#F9F8F6] cursor-grab active:cursor-grabbing overflow-hidden select-none min-h-[380px]"
+        className="relative flex-1 bg-[#F9F8F6] cursor-grab active:cursor-grabbing overflow-hidden select-none min-h-[280px]"
       >
         <canvas
           ref={canvasRef}
@@ -804,7 +804,7 @@ export const VectorPlot: React.FC<VectorPlotProps> = ({
         </div>
 
         {/* Legend Filter Buttons Row */}
-        <div className="flex flex-wrap items-center gap-2 max-h-24 overflow-y-auto scrollbar-thin">
+        <div className="flex flex-wrap items-center gap-1.5 max-h-36 overflow-y-auto p-2 border border-gray-200 bg-[#FAF9F7]">
           {colorMode === "sentiment" ? (
             <>
               {/* Positive */}

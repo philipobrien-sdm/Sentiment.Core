@@ -1420,16 +1420,16 @@ Respond using clean, structured markdown with the following headers:
       )}
 
       {/* Main Header navigation */}
-      <header id="main_header" className="bg-white border-b border-[#E5E3DF] h-16 flex items-center justify-between px-8 shrink-0 sticky top-0 z-40">
-        <div className="flex items-center gap-4">
-          <span className="font-serif italic text-2xl tracking-tighter text-[#1A1A1A]">Sentiment.Core</span>
+      <header id="main_header" className="bg-white border-b border-[#E5E3DF] min-h-16 py-3 px-4 sm:px-8 flex flex-wrap items-center justify-between gap-3 shrink-0 sticky top-0 z-40 shadow-xs">
+        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+          <span className="font-serif italic text-xl sm:text-2xl tracking-tighter text-[#1A1A1A]">Sentiment.Core</span>
           <span className="h-4 w-px bg-[#E5E3DF]"></span>
-          <span className="text-[10px] uppercase tracking-[0.2em] font-semibold opacity-60">Vector Intelligence Hub</span>
+          <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.2em] font-semibold opacity-60">Vector Intelligence Hub</span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
           {/* Active Local LLM Info Label */}
-          <div className="hidden md:flex items-center gap-2 border border-[#E5E3DF] bg-[#F9F8F6] px-3 py-1.5 text-[10px] uppercase tracking-wider font-mono">
+          <div className="hidden md:flex items-center gap-2 border border-[#E5E3DF] bg-[#F9F8F6] px-2.5 py-1.5 text-[10px] uppercase tracking-wider font-mono">
             <span className={`h-1.5 w-1.5 rounded-full ${llmSettings.useCustomEmbedding ? "bg-[#4A6741] animate-pulse" : "bg-gray-400"}`} />
             <span className="text-gray-500">LLM:</span>
             <span className="font-bold text-[#1A1A1A]">{llmSettings.modelName}</span>
@@ -1437,7 +1437,7 @@ Respond using clean, structured markdown with the following headers:
 
           {/* Quick stats label (only if initialized) */}
           {isInitialized && (
-            <div className="border border-[#E5E3DF] text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-mono font-bold bg-white">
+            <div className="border border-[#E5E3DF] text-[#1A1A1A] px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-mono font-bold bg-white">
               {comments.filter(c => !c.isArchived).length} records
             </div>
           )}
@@ -1451,7 +1451,7 @@ Respond using clean, structured markdown with the following headers:
                 }
                 setIsSynthesisModalOpen(true);
               }}
-              className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+              className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
               title="Open LLM Critique History Hub"
             >
               <History className="w-3.5 h-3.5 text-amber-500" />
@@ -1463,7 +1463,7 @@ Respond using clean, structured markdown with the following headers:
           {isInitialized && (
             <button 
               onClick={() => handleOpenStakeholderModal()}
-              className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#4A6741] hover:bg-emerald-50 text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+              className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#4A6741] hover:bg-emerald-50 text-[#1A1A1A] px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
               title="Open Stakeholder Power-Interest Matrix Modal"
             >
               <FolderKanban className="w-3.5 h-3.5 text-[#4A6741]" />
@@ -1475,7 +1475,7 @@ Respond using clean, structured markdown with the following headers:
           {isInitialized && (
             <button 
               onClick={() => setIsDocumentContextModalOpen(true)}
-              className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-amber-600 hover:bg-amber-50 text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+              className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-amber-600 hover:bg-amber-50 text-[#1A1A1A] px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
               title="Open Document Context Workbench Modal"
             >
               <BookOpen className="w-3.5 h-3.5 text-amber-600" />
@@ -1486,7 +1486,7 @@ Respond using clean, structured markdown with the following headers:
           {/* About Modal Button */}
           <button 
             onClick={() => setIsAboutOpen(true)}
-            className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+            className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
             title="About Sentiment.Core & Embeddings"
           >
             <Info className="w-3.5 h-3.5 text-[#4A6741]" />
@@ -1496,7 +1496,7 @@ Respond using clean, structured markdown with the following headers:
           {/* Slide Drawer Button */}
           <button 
             onClick={() => setIsSettingsOpen(true)}
-            className="flex items-center gap-1.5 border border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+            className="flex items-center gap-1.5 border border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-2.5 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
             title="Configure Local LLM"
           >
             <Settings className="w-3.5 h-3.5" />
@@ -1563,8 +1563,8 @@ Respond using clean, structured markdown with the following headers:
             </section>
 
             {/* View Mode Navigation Tabs */}
-            <div className="flex flex-col sm:flex-row sm:items-stretch justify-between border-b border-[#E5E3DF] gap-2 w-full">
-              <section className="flex overflow-x-auto shrink-0 scrollbar-none">
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-[#E5E3DF] gap-2 w-full pb-1 md:pb-0">
+              <section className="flex flex-wrap items-center gap-1 sm:gap-2 max-w-full overflow-x-auto scrollbar-thin">
                 {[
                   { id: "explore", label: "Similarity Plot", icon: Map },
                   { id: "list", label: "Comments List", icon: List },
@@ -1580,10 +1580,10 @@ Respond using clean, structured markdown with the following headers:
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id as any)}
-                      className={`flex items-center justify-center gap-2 px-6 py-3.5 text-[11px] uppercase tracking-[0.15em] font-semibold border-b-2 -mb-[2px] transition-all shrink-0 ${
+                      className={`flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2.5 text-[10px] sm:text-[11px] uppercase tracking-[0.12em] font-semibold border-b-2 transition-all cursor-pointer ${
                         isActive
-                          ? "border-[#1A1A1A] text-[#1A1A1A]"
-                          : "border-transparent text-gray-400 hover:text-[#1A1A1A]"
+                          ? "border-[#1A1A1A] text-[#1A1A1A] bg-[#F9F8F6]"
+                          : "border-transparent text-gray-500 hover:text-[#1A1A1A] hover:bg-gray-50"
                       }`}
                     >
                       <Icon className="w-3.5 h-3.5" />
@@ -1593,7 +1593,7 @@ Respond using clean, structured markdown with the following headers:
                 })}
               </section>
 
-              <div className="flex items-center px-4 sm:px-0 py-2 sm:py-0 mb-1 sm:mb-0">
+              <div className="flex items-center px-2 sm:px-0 py-1 sm:py-0 shrink-0">
                 <button 
                   onClick={() => {
                     if (!activeSynthesis && synthesisHistory.length > 0) {
@@ -1601,7 +1601,7 @@ Respond using clean, structured markdown with the following headers:
                     }
                     setIsSynthesisModalOpen(true);
                   }}
-                  className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white"
+                  className="flex items-center gap-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] hover:bg-[#F9F8F6] text-[#1A1A1A] px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-all bg-white shadow-xs"
                   title="View Saved Critical Summaries & Audits"
                 >
                   <History className="w-3.5 h-3.5 text-amber-500" />
@@ -1618,7 +1618,7 @@ Respond using clean, structured markdown with the following headers:
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                   
                   {/* Interactive Plot */}
-                  <div className="xl:col-span-2 h-[520px] flex flex-col">
+                  <div className="xl:col-span-2 min-h-[580px] lg:h-[620px] flex flex-col">
                     <VectorPlot
                       comments={filteredComments}
                       selectedCommentId={selectedCommentId}
