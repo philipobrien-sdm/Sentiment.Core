@@ -1479,7 +1479,7 @@ Respond using clean, structured markdown with the following headers:
               title="Open Document Context Workbench Modal"
             >
               <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-              <span>Doc Model ({documentSections.filter(s => s.hasText).length}/{documentSections.length})</span>
+              <span>Doc Model ({documentSections.filter(s => s.excerptText && s.excerptText.trim().length > 0).length}/{documentSections.length})</span>
             </button>
           )}
 
@@ -2164,8 +2164,8 @@ Respond using clean, structured markdown with the following headers:
         isOpen={isDocumentContextModalOpen}
         onClose={() => setIsDocumentContextModalOpen(false)}
         comments={comments}
-        sections={documentSections}
-        onSaveSections={(updated) => {
+        documentSections={documentSections}
+        onUpdateDocumentSections={(updated) => {
           setDocumentSections(updated);
           showToast(`Saved ${updated.length} document context section(s)!`, "success");
         }}

@@ -117,6 +117,7 @@ export const ImportExport: React.FC<ImportExportProps> = ({
               const lower = h.toLowerCase();
               return (
                 lower.includes("doc") ||
+                lower.includes("model") ||
                 lower.includes("section") ||
                 lower.includes("clause") ||
                 lower.includes("ref") ||
@@ -125,7 +126,9 @@ export const ImportExport: React.FC<ImportExportProps> = ({
                 lower.includes("provision") ||
                 lower.includes("requirement") ||
                 lower.includes("policy") ||
-                lower.includes("material")
+                lower.includes("material") ||
+                lower.includes("spec") ||
+                lower.includes("paragraph")
               );
             });
 
@@ -515,15 +518,16 @@ export const ImportExport: React.FC<ImportExportProps> = ({
                   </select>
                 </div>
 
-                {/* 6. Document Reference / Section Column Mapper */}
+                {/* 6. Document Reference / Section / Model Column Mapper */}
                 <div>
-                  <label className="font-semibold text-gray-600 block mb-1.5 uppercase tracking-wider text-[9px]">
-                    Document Ref / Section / Clause Column (Optional):
+                  <label className="font-semibold text-amber-800 block mb-1.5 uppercase tracking-wider text-[9px] flex items-center justify-between">
+                    <span>Document Model / Ref / Section Column (Optional):</span>
+                    <span className="text-gray-400 normal-case font-mono text-[9px]">Links to Doc Model Context</span>
                   </label>
                   <select
                     value={selectedDocRefField}
                     onChange={(e) => setSelectedDocRefField(e.target.value)}
-                    className="w-full bg-white border border-[#E5E3DF] rounded-none px-2.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-xs"
+                    className="w-full bg-amber-50/50 border border-amber-300 rounded-none px-2.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-xs font-mono font-medium text-[#1A1A1A]"
                   >
                     <option value="">-- Auto-detect or omit document reference --</option>
                     {csvPreview.headers.map((h) => (

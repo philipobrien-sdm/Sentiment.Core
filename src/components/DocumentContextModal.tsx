@@ -28,23 +28,36 @@ interface DocumentContextModalProps {
   isOpen: boolean;
   onClose: () => void;
   comments: CommentItem[];
-  documentSections: DocumentSection[];
-  onUpdateDocumentSections: (sections: DocumentSection[]) => void;
+  sections?: DocumentSection[];
+  documentSections?: DocumentSection[];
+  onSaveSections?: (sections: DocumentSection[]) => void;
+  onUpdateDocumentSections?: (sections: DocumentSection[]) => void;
   showToast: (message: string, type?: "success" | "info" | "error") => void;
 }
 
 export const DocumentContextModal: React.FC<DocumentContextModalProps> = ({
   isOpen,
   onClose,
-  comments,
+  comments = [],
+  sections,
   documentSections,
+  onSaveSections,
   onUpdateDocumentSections,
   showToast,
 }) => {
   if (!isOpen) return null;
 
+  const activeSections = useMemo(() => {
+    return sections || documentSections || [];
+  }, [sections, documentSections]);
+
+  const handleUpdate = (updated: DocumentSection[]) => {
+    if (onSaveSections) onSaveSections(updated);
+    if (onUpdateDocumentSections) onUpdateDocumentSections(updated);
+  };
+
   const [selectedSectionId, setSelectedSectionId] = useState<string>(
-    documentSections[0]?.id || ""
+    activeSections[0]?.id || ""
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [newRefInput, setNewRefInput] = useState("");
@@ -53,8 +66,9 @@ export const DocumentContextModal: React.FC<DocumentContextModalProps> = ({
 
   // Selected section state
   const selectedSection = useMemo(() => {
-    return documentSections.find((s) => s.id === selectedSectionId) || documentSections[0] || null;
-  }, [documentSections, selectedSectionId]);
+    if (!activeSections || activeSections.length === 0) return null;
+    return activeSections.find((s) => s.id === selectedSectionId) || activeSections[0] || null;
+  }, [activeSections, selectedSectionId]);
 
   const [editingExcerpt, setEditingExcerpt] = useState<string>(selectedSection?.excerptText || "");
 
@@ -64,6 +78,13 @@ export const DocumentContextModal: React.FC<DocumentContextModalProps> = ({
       setEditingExcerpt(selectedSection.excerptText || "");
     }
   }, [selectedSection?.id]);
+
+  // Keep selectedSectionId valid when activeSections changes
+  React.useEffect(() => {
+    if (!selectedSectionId && activeSections.length > 0) {
+      setSelectedSectionId(activeSections[0].id);
+    }
+  }, [activeSections, selectedSectionId]);
 
   // Count comments per reference
   const commentCountsByRef = useMemo(() => {
@@ -90,19 +111,19 @@ export const DocumentContextModal: React.FC<DocumentContextModalProps> = ({
 
   // Filtered sections list
   const filteredSections = useMemo(() => {
-    return documentSections.filter(
+    return activeSections.filter(
       (s) =>
         s.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (s.title && s.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
         s.excerptText.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [documentSections, searchQuery]);
+  }, [activeSections, searchQuery]);
 
   // Auto-Sync from CSV Comments
   const handleAutoExtractRefs = () => {
-    const updated = syncDocumentSectionsWithComments(comments, documentSections);
-    onUpdateDocumentSections(updated);
-    const addedCount = updated.length - documentSections.length;
+    const updated = syncDocumentSectionsWithComments(comments, activeSections);
+    handleUpdate(updated);
+    const addedCount = updated.length - activeSections.length;
     if (addedCount > 0) {
       showToast(`Discovered and added ${addedCount} document references from dataset!`, "success");
     } else {
@@ -114,7 +135,7 @@ export const DocumentContextModal: React.FC<DocumentContextModalProps> = ({
   const handleAddCustomSection = () => {
     if (!newRefInput.trim()) return;
     const refName = newRefInput.trim();
-    const exists = documentSections.some((s) => s.reference.toLowerCase() === refName.toLowerCase());
+    const exists = activeSections.some((s) => s.reference.toLowerCase() === refName.toLowerCase());
     if (exists) {
       showToast("A section with this reference name already exists.", "info");
       return;
@@ -128,8 +149,8 @@ export const DocumentContextModal: React.FC<DocumentContextModalProps> = ({
       updatedAt: new Date().toLocaleDateString(),
     };
 
-    const updated = [newSec, ...documentSections];
-    onUpdateDocumentSections(updated);
+    const updated = [newSec, ...activeSections];
+    handleUpdate(updated);
     setSelectedSectionId(newSec.id);
     setNewRefInput("");
     showToast(`Added document section "${refName}"`, "success");
@@ -138,19 +159,19 @@ export const DocumentContextModal: React.FC<DocumentContextModalProps> = ({
   // Save changes to current section
   const handleSaveCurrentExcerpt = () => {
     if (!selectedSection) return;
-    const updated = documentSections.map((s) =>
+    const updated = activeSections.map((s) =>
       s.id === selectedSection.id
         ? { ...s, excerptText: editingExcerpt, updatedAt: new Date().toLocaleDateString() }
         : s
     );
-    onUpdateDocumentSections(updated);
+    handleUpdate(updated);
     showToast(`Saved draft material context for "${selectedSection.reference}"`, "success");
   };
 
   // Delete section
   const handleDeleteSection = (id: string) => {
-    const updated = documentSections.filter((s) => s.id !== id);
-    onUpdateDocumentSections(updated);
+    const updated = activeSections.filter((s) => s.id !== id);
+    handleUpdate(updated);
     if (selectedSectionId === id) {
       setSelectedSectionId(updated[0]?.id || "");
     }
@@ -160,15 +181,15 @@ export const DocumentContextModal: React.FC<DocumentContextModalProps> = ({
   // Parse pasted full document
   const handleParsePastedFullDoc = () => {
     if (!pastedFullDoc.trim()) return;
-    const updated = parsePastedDocumentToSections(pastedFullDoc, documentSections);
-    onUpdateDocumentSections(updated);
+    const updated = parsePastedDocumentToSections(pastedFullDoc, activeSections);
+    handleUpdate(updated);
     setIsPastingFullDocOpen(false);
     setPastedFullDoc("");
     showToast("Processed document sections and updated context model!", "success");
   };
 
   const totalRefsCount = extractDocumentReferencesFromComments(comments).length;
-  const sectionsWithContextCount = documentSections.filter((s) => s.excerptText && s.excerptText.trim().length > 0).length;
+  const sectionsWithContextCount = activeSections.filter((s) => s.excerptText && s.excerptText.trim().length > 0).length;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -201,12 +222,12 @@ export const DocumentContextModal: React.FC<DocumentContextModalProps> = ({
           <div className="flex items-center gap-6 font-mono text-[11px]">
             <div className="flex items-center gap-2">
               <span className="text-gray-500">Document Sections:</span>
-              <strong className="text-[#1A1A1A] font-bold">{documentSections.length}</strong>
+              <strong className="text-[#1A1A1A] font-bold">{activeSections.length}</strong>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-gray-500">Sections with Context Text:</span>
               <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">
-                {sectionsWithContextCount} / {documentSections.length}
+                {sectionsWithContextCount} / {activeSections.length}
               </span>
             </div>
             <div className="flex items-center gap-2">
