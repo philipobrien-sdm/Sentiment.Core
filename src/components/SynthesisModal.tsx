@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { MarkdownViewer } from "./MarkdownViewer";
-import { X, Calendar, Sparkles, Copy, Download, Trash2, Clock, Map, Layers, FileCheck2 } from "lucide-react";
+import { X, Calendar, Sparkles, Copy, Download, Trash2, Clock, Map, Layers, FileCheck2, Edit3, Check, Save, Eye } from "lucide-react";
 
 export interface SavedSynthesis {
   id: string;
@@ -18,6 +18,7 @@ interface SynthesisModalProps {
   onSelectHistoryItem: (item: SavedSynthesis) => void;
   onDeleteHistoryItem: (id: string) => void;
   onClearHistory: () => void;
+  onUpdateSynthesis?: (updated: SavedSynthesis) => void;
   onPerformMetaReview?: () => void;
   isSynthesizingMeta?: boolean;
 }
@@ -30,26 +31,58 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
   onSelectHistoryItem,
   onDeleteHistoryItem,
   onClearHistory,
+  onUpdateSynthesis,
   onPerformMetaReview,
   isSynthesizingMeta = false,
 }) => {
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [editingTitle, setEditingTitle] = useState<string>("");
+  const [editingMarkdown, setEditingMarkdown] = useState<string>("");
+  const [editTab, setEditTab] = useState<"write" | "preview">("write");
+  const [copied, setCopied] = useState<boolean>(false);
+
+  // Sync editing fields when active synthesis changes
+  useEffect(() => {
+    if (activeSynthesis) {
+      setEditingTitle(activeSynthesis.title);
+      setEditingMarkdown(activeSynthesis.markdown);
+      setIsEditing(false);
+    }
+  }, [activeSynthesis?.id]);
+
   if (!isOpen) return null;
 
   const handleCopy = () => {
     if (!activeSynthesis) return;
-    navigator.clipboard.writeText(activeSynthesis.markdown);
-    alert("Critique copied to clipboard!");
+    const textToCopy = isEditing ? editingMarkdown : activeSynthesis.markdown;
+    navigator.clipboard.writeText(textToCopy);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = () => {
     if (!activeSynthesis) return;
-    const blob = new Blob([activeSynthesis.markdown], { type: "text/markdown;charset=utf-8" });
+    const content = isEditing ? editingMarkdown : activeSynthesis.markdown;
+    const title = isEditing ? editingTitle : activeSynthesis.title;
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${activeSynthesis.title.toLowerCase().replace(/[^a-z0-9]/g, "_")}_synthesis.md`;
+    link.download = `${title.toLowerCase().replace(/[^a-z0-9]/g, "_")}_synthesis.md`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleSaveChanges = () => {
+    if (!activeSynthesis || !onUpdateSynthesis) return;
+    const updated: SavedSynthesis = {
+      ...activeSynthesis,
+      title: editingTitle.trim() || activeSynthesis.title,
+      markdown: editingMarkdown,
+      timestamp: `${activeSynthesis.timestamp} (Edited)`
+    };
+    onUpdateSynthesis(updated);
+    setIsEditing(false);
   };
 
   return (
@@ -172,9 +205,9 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
           <div className="flex-1 flex flex-col min-w-0 bg-white">
             {activeSynthesis ? (
               <>
-                {/* Active Critique Information */}
+                {/* Active Critique Information Header */}
                 <div className="px-6 py-4 border-b border-[#E5E3DF] bg-[#F9F8F6]/50 flex flex-wrap items-center justify-between gap-3 shrink-0">
-                  <div className="space-y-0.5">
+                  <div className="space-y-1 flex-1 min-w-[240px]">
                     <div className="flex items-center gap-2">
                       <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 uppercase tracking-wider ${
                         activeSynthesis.source === "map" 
@@ -183,36 +216,147 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
                           ? "bg-amber-100 border border-amber-300 text-amber-900 font-bold"
                           : "bg-purple-50 border border-purple-200 text-purple-600"
                       }`}>
-                        {activeSynthesis.source === "map" ? "Semantic Neighborhood" : activeSynthesis.source === "meta" ? "Executive Meta-Review" : "Deduplication Cluster"}
+                        {activeSynthesis.source === "map" ? "Semantic Neighborhood" : activeSynthesis.source === "meta" ? "Executive Meta-Review" : "Cluster Synthesis"}
                       </span>
                       <span className="text-[10px] text-gray-400 font-mono">{activeSynthesis.timestamp}</span>
                     </div>
-                    <h3 className="text-base font-serif italic text-[#1A1A1A] font-bold">
-                      {activeSynthesis.title}
-                    </h3>
+
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        placeholder="Report title..."
+                        className="w-full bg-white border border-[#1A1A1A] px-2.5 py-1 text-sm font-serif italic text-[#1A1A1A] font-bold focus:outline-none"
+                      />
+                    ) : (
+                      <h3 className="text-base font-serif italic text-[#1A1A1A] font-bold">
+                        {activeSynthesis.title}
+                      </h3>
+                    )}
                   </div>
 
                   {/* Actions for active report */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Copy Button with visual feedback */}
                     <button
                       onClick={handleCopy}
-                      className="px-3 py-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] bg-white text-[10px] font-mono uppercase font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className={`px-3 py-1.5 border text-[10px] font-mono uppercase font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                        copied
+                          ? "bg-emerald-600 text-white border-emerald-700"
+                          : "bg-white border-[#E5E3DF] hover:border-[#1A1A1A] text-gray-800"
+                      }`}
+                      title="Copy report markdown to clipboard"
                     >
-                      <Copy className="w-3.5 h-3.5" /> Copy MD
+                      {copied ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-white" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Report</span>
+                        </>
+                      )}
                     </button>
+
+                    {/* Edit Mode Toggle / Save Button */}
+                    {isEditing ? (
+                      <button
+                        onClick={handleSaveChanges}
+                        className="px-3 py-1.5 bg-[#4A6741] hover:bg-[#3D5535] text-white text-[10px] font-mono uppercase font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                      >
+                        <Save className="w-3.5 h-3.5" /> Save Changes
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="px-3 py-1.5 border border-[#E5E3DF] hover:border-[#1A1A1A] bg-white text-[10px] font-mono uppercase font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Edit report title or markdown text"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-amber-700" /> Edit Report
+                      </button>
+                    )}
+
                     <button
                       onClick={handleDownload}
                       className="px-3 py-1.5 bg-[#1A1A1A] hover:bg-[#1A1A1A]/90 text-white text-[10px] font-mono uppercase font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="Download as Markdown file"
                     >
                       <Download className="w-3.5 h-3.5" /> Save .md
                     </button>
                   </div>
                 </div>
 
-                {/* Markdown view area */}
-                <div className="flex-1 overflow-y-auto p-8 prose max-w-none">
-                  <MarkdownViewer markdown={activeSynthesis.markdown} />
-                </div>
+                {/* Body Area: Editing vs View Mode */}
+                {isEditing ? (
+                  <div className="flex-1 flex flex-col overflow-hidden p-4 space-y-3 bg-[#F9F8F6]">
+                    <div className="flex items-center justify-between border-b border-[#E5E3DF] pb-2">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setEditTab("write")}
+                          className={`px-3 py-1 text-[10px] font-mono uppercase font-bold transition-all ${
+                            editTab === "write"
+                              ? "bg-[#1A1A1A] text-white"
+                              : "bg-white border border-[#E5E3DF] text-gray-600 hover:text-black"
+                          }`}
+                        >
+                          <Edit3 className="w-3 h-3 inline mr-1" /> Edit Content
+                        </button>
+                        <button
+                          onClick={() => setEditTab("preview")}
+                          className={`px-3 py-1 text-[10px] font-mono uppercase font-bold transition-all ${
+                            editTab === "preview"
+                              ? "bg-[#1A1A1A] text-white"
+                              : "bg-white border border-[#E5E3DF] text-gray-600 hover:text-black"
+                          }`}
+                        >
+                          <Eye className="w-3 h-3 inline mr-1" /> Live Preview
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setIsEditing(false);
+                            setEditingTitle(activeSynthesis.title);
+                            setEditingMarkdown(activeSynthesis.markdown);
+                          }}
+                          className="px-2.5 py-1 text-[10px] font-mono text-gray-500 hover:text-[#A13D2D] hover:underline cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSaveChanges}
+                          className="px-3 py-1 bg-[#4A6741] text-white text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 overflow-hidden">
+                      {editTab === "write" ? (
+                        <textarea
+                          value={editingMarkdown}
+                          onChange={(e) => setEditingMarkdown(e.target.value)}
+                          placeholder="Type or paste markdown content here..."
+                          className="w-full h-full bg-white border border-[#E5E3DF] p-4 font-mono text-xs text-[#1A1A1A] focus:outline-none focus:border-[#1A1A1A] resize-none leading-relaxed"
+                        />
+                      ) : (
+                        <div className="h-full bg-white border border-[#E5E3DF] p-6 overflow-y-auto prose max-w-none">
+                          <MarkdownViewer markdown={editingMarkdown} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Standard Markdown View Mode */
+                  <div className="flex-1 overflow-y-auto p-8 prose max-w-none">
+                    <MarkdownViewer markdown={activeSynthesis.markdown} />
+                  </div>
+                )}
               </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-gray-400">

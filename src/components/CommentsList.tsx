@@ -20,6 +20,7 @@ interface CommentsListProps {
   onSelectCommentGlobal?: (id: string | null) => void;
   selectedCommentIdGlobal?: string | null;
   onSaveSynthesisToHistory?: (synthesis: { title: string; markdown: string; source: string }) => void;
+  onUpdateComment?: (updatedComment: CommentItem) => void;
 }
 
 export function generateLocalHeuristicPerspectiveSynthesis(
@@ -138,12 +139,14 @@ export const CommentsList: React.FC<CommentsListProps> = ({
   onSelectCommentGlobal,
   selectedCommentIdGlobal,
   onSaveSynthesisToHistory,
+  onUpdateComment,
 }) => {
   // Local list search & filtering
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSentiment, setSelectedSentiment] = useState<string>("");
   const [selectedTopic, setSelectedTopic] = useState<string>("");
   const [selectedOrg, setSelectedOrg] = useState<string>("");
+  const [responseFilter, setResponseFilter] = useState<"all" | "flagged" | "unflagged">("all");
 
   // Selected comment local state
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
@@ -162,6 +165,21 @@ export const CommentsList: React.FC<CommentsListProps> = ({
     return comments.find(c => c.id === activeSelectedId) || null;
   }, [activeSelectedId, comments]);
 
+  // Proposed response states for selected comment
+  const [proposedResponseText, setProposedResponseText] = useState<string>("");
+  const [proposedResponseRole, setProposedResponseRole] = useState<string>("Policy Analyst");
+  const [isEditingProposedResponse, setIsEditingProposedResponse] = useState<boolean>(false);
+  const [isDraftingAIResponse, setIsDraftingAIResponse] = useState<boolean>(false);
+
+  // Sync proposed response form whenever selected comment changes
+  React.useEffect(() => {
+    if (selectedComment) {
+      setProposedResponseText(selectedComment.proposedResponse || "");
+      setProposedResponseRole(selectedComment.proposedResponseBy || "Policy Analyst");
+      setIsEditingProposedResponse(!selectedComment.proposedResponse);
+    }
+  }, [selectedComment?.id]);
+
   // Synthesis and analysis states
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hasMappedPerspectives, setHasMappedPerspectives] = useState(false);
@@ -173,6 +191,65 @@ export const CommentsList: React.FC<CommentsListProps> = ({
     setHasMappedPerspectives(false);
     setSynthesisResult(null);
   }, [activeSelectedId]);
+
+  // AI Response Drafter handler
+  const handleDraftAIResponse = async () => {
+    if (!selectedComment) return;
+    setIsDraftingAIResponse(true);
+
+    const prompt = `You are a Senior Public Policy Analyst & Stakeholder Relations Lead.
+Draft an official, empathetic, professional response to the following stakeholder feedback comment:
+
+Comment Details:
+- Text: "${selectedComment.text}"
+- Organization: "${selectedComment.organizationName || 'General Public'}"
+- Sentiment: "${selectedComment.sentiment.toUpperCase()}"
+${selectedComment.documentReference ? `- Document Reference: "${selectedComment.documentReference}"` : ""}
+
+Task: Write a concise 2-3 sentence official proposed response addressing the feedback, explaining how the team acknowledges their input and plans to consider or integrate it into future policy/product revisions.`;
+
+    try {
+      let draftedText = "";
+      try {
+        draftedText = await fetchLocalCompletion(prompt, llmSettings);
+      } catch (e) {
+        // Fallback heuristic response draft
+        draftedText = `Thank you to ${selectedComment.organizationName || 'the reviewer'} for providing feedback regarding ${selectedComment.topic || 'this topic'}${selectedComment.documentReference ? ` (${selectedComment.documentReference})` : ''}. The project team acknowledges this perspective and will take these considerations into account during our upcoming design review session.`;
+      }
+      setProposedResponseText(draftedText.trim());
+    } catch (err) {
+      console.error("AI response drafting failed:", err);
+    } finally {
+      setIsDraftingAIResponse(false);
+    }
+  };
+
+  // Save Proposed Response
+  const handleSaveProposedResponse = () => {
+    if (!selectedComment || !onUpdateComment) return;
+    const updated: CommentItem = {
+      ...selectedComment,
+      proposedResponse: proposedResponseText.trim(),
+      proposedResponseBy: proposedResponseRole.trim() || "Policy Analyst",
+      proposedResponseAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString()
+    };
+    onUpdateComment(updated);
+    setIsEditingProposedResponse(false);
+  };
+
+  // Delete Proposed Response
+  const handleRemoveProposedResponse = () => {
+    if (!selectedComment || !onUpdateComment) return;
+    const updated: CommentItem = {
+      ...selectedComment,
+      proposedResponse: undefined,
+      proposedResponseBy: undefined,
+      proposedResponseAt: undefined
+    };
+    onUpdateComment(updated);
+    setProposedResponseText("");
+    setIsEditingProposedResponse(true);
+  };
 
   // Extract unique values for filter dropdowns
   const availableTopics = useMemo(() => {
@@ -219,9 +296,13 @@ export const CommentsList: React.FC<CommentsListProps> = ({
         if (org !== selectedOrg) return false;
       }
 
+      // Response flag filter
+      if (responseFilter === "flagged" && (!c.proposedResponse || c.proposedResponse.trim().length === 0)) return false;
+      if (responseFilter === "unflagged" && c.proposedResponse && c.proposedResponse.trim().length > 0) return false;
+
       return true;
     });
-  }, [comments, searchQuery, selectedSentiment, selectedTopic, selectedOrg]);
+  }, [comments, searchQuery, selectedSentiment, selectedTopic, selectedOrg, responseFilter]);
 
   // Similar topic comments calculation
   // "not saying the same thing but speaking to the same topic"
@@ -376,13 +457,13 @@ Please write a gorgeous, highly precise, professional viewpoint synthesis in cle
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {/* Sentiment dropdown */}
             <div>
               <select
                 value={selectedSentiment}
                 onChange={(e) => setSelectedSentiment(e.target.value)}
-                className="w-full bg-white border border-[#E5E3DF] rounded-none px-2 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-[10px] uppercase tracking-wider font-semibold text-gray-600"
+                className="w-full bg-white border border-[#E5E3DF] rounded-none px-1.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-[9px] uppercase tracking-wider font-semibold text-gray-600 truncate"
               >
                 <option value="">Sentiment</option>
                 <option value="positive">Positive</option>
@@ -396,7 +477,7 @@ Please write a gorgeous, highly precise, professional viewpoint synthesis in cle
               <select
                 value={selectedTopic}
                 onChange={(e) => setSelectedTopic(e.target.value)}
-                className="w-full bg-white border border-[#E5E3DF] rounded-none px-2 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-[10px] uppercase tracking-wider font-semibold text-gray-600 truncate"
+                className="w-full bg-white border border-[#E5E3DF] rounded-none px-1.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-[9px] uppercase tracking-wider font-semibold text-gray-600 truncate"
               >
                 <option value="">Topic</option>
                 {availableTopics.map(t => (
@@ -410,12 +491,25 @@ Please write a gorgeous, highly precise, professional viewpoint synthesis in cle
               <select
                 value={selectedOrg}
                 onChange={(e) => setSelectedOrg(e.target.value)}
-                className="w-full bg-white border border-[#E5E3DF] rounded-none px-2 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-[10px] uppercase tracking-wider font-semibold text-gray-600 truncate"
+                className="w-full bg-white border border-[#E5E3DF] rounded-none px-1.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-[9px] uppercase tracking-wider font-semibold text-gray-600 truncate"
               >
                 <option value="">Organization</option>
                 {availableOrgs.map(o => (
                   <option key={o} value={o}>{o}</option>
                 ))}
+              </select>
+            </div>
+
+            {/* Proposed Response Status dropdown */}
+            <div>
+              <select
+                value={responseFilter}
+                onChange={(e) => setResponseFilter(e.target.value as any)}
+                className="w-full bg-white border border-[#E5E3DF] rounded-none px-1.5 py-1.5 focus:outline-none focus:border-[#1A1A1A] text-[9px] uppercase tracking-wider font-semibold text-amber-900 font-mono truncate"
+              >
+                <option value="all">Response: All</option>
+                <option value="flagged">💬 Proposed Only</option>
+                <option value="unflagged">No Response Yet</option>
               </select>
             </div>
           </div>
@@ -426,6 +520,7 @@ Please write a gorgeous, highly precise, professional viewpoint synthesis in cle
           {filteredCommentsList.length > 0 ? (
             filteredCommentsList.map((c) => {
               const isSelected = activeSelectedId === c.id;
+              const hasResponse = c.proposedResponse && c.proposedResponse.trim().length > 0;
               return (
                 <button
                   key={c.id}
@@ -437,11 +532,23 @@ Please write a gorgeous, highly precise, professional viewpoint synthesis in cle
                   }`}
                 >
                   <div className="flex items-center justify-between w-full mb-1.5 gap-2">
-                    <span className={`text-[9px] uppercase font-mono tracking-widest font-semibold px-1.5 py-0.5 ${
-                      isSelected ? "bg-white/10 text-white" : "bg-gray-100 text-gray-500"
-                    }`}>
-                      Row {c.csvRowIndex || "N/A"}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-[9px] uppercase font-mono tracking-widest font-semibold px-1.5 py-0.5 ${
+                        isSelected ? "bg-white/10 text-white" : "bg-gray-100 text-gray-500"
+                      }`}>
+                        Row {c.csvRowIndex || "N/A"}
+                      </span>
+                      {hasResponse && (
+                        <span className={`text-[8px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 border flex items-center gap-1 ${
+                          isSelected
+                            ? "bg-amber-400 text-black border-amber-300"
+                            : "bg-amber-100 text-amber-900 border-amber-300"
+                        }`}>
+                          💬 Proposed Response
+                        </span>
+                      )}
+                    </div>
+
                     <span className={`text-[9px] uppercase font-bold tracking-wider rounded-none px-2 py-0.5 ${
                       c.sentiment === "positive" 
                         ? (isSelected ? "bg-[#4A6741]/40 text-green-300" : "bg-[#4A6741]/10 text-[#4A6741]") 
@@ -562,6 +669,111 @@ Please write a gorgeous, highly precise, professional viewpoint synthesis in cle
                   }`}>{selectedComment.sentiment}</span>
                 </span>
               </div>
+            </div>
+
+            {/* Proposed Official Response Section */}
+            <div className="border border-amber-200 bg-amber-50/50 p-4 space-y-3 rounded-none">
+              <div className="flex items-center justify-between border-b border-amber-200/80 pb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-amber-900 font-bold text-xs font-mono uppercase tracking-wider flex items-center gap-1.5">
+                    💬 Proposed Response
+                  </span>
+                  {selectedComment.proposedResponse && (
+                    <span className="bg-amber-200/80 text-amber-900 text-[9px] font-mono font-bold px-1.5 py-0.5">
+                      Flagged
+                    </span>
+                  )}
+                </div>
+
+                {!isEditingProposedResponse && selectedComment.proposedResponse && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedComment.proposedResponse || "");
+                        alert("Proposed response copied!");
+                      }}
+                      className="px-2 py-1 bg-white border border-amber-300 hover:border-amber-500 text-amber-900 text-[9px] font-mono uppercase font-bold cursor-pointer"
+                    >
+                      Copy
+                    </button>
+                    <button
+                      onClick={() => setIsEditingProposedResponse(true)}
+                      className="px-2 py-1 bg-white border border-amber-300 hover:border-amber-500 text-amber-900 text-[9px] font-mono uppercase font-bold cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={handleRemoveProposedResponse}
+                      className="px-2 py-1 bg-white border border-red-200 text-red-700 hover:bg-red-50 text-[9px] font-mono uppercase font-bold cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {isEditingProposedResponse ? (
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-900">Author Role:</label>
+                      <input
+                        type="text"
+                        value={proposedResponseRole}
+                        onChange={(e) => setProposedResponseRole(e.target.value)}
+                        placeholder="e.g. Policy Analyst, CX Team"
+                        className="bg-white border border-amber-300 px-2 py-1 text-xs text-amber-950 font-mono focus:outline-none focus:border-amber-600"
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleDraftAIResponse}
+                      disabled={isDraftingAIResponse}
+                      className="px-3 py-1 bg-amber-900 hover:bg-amber-950 text-amber-100 text-[9px] font-mono uppercase font-bold tracking-wider flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 text-amber-300 ${isDraftingAIResponse ? "animate-spin" : ""}`} />
+                      <span>{isDraftingAIResponse ? "Drafting Response..." : "✨ AI Draft Response"}</span>
+                    </button>
+                  </div>
+
+                  <textarea
+                    value={proposedResponseText}
+                    onChange={(e) => setProposedResponseText(e.target.value)}
+                    placeholder="Type or auto-generate a proposed official response to this feedback comment..."
+                    className="w-full bg-white border border-amber-300 p-3 text-xs text-amber-950 font-sans focus:outline-none focus:border-amber-600 min-h-[90px] leading-relaxed resize-y"
+                  />
+
+                  <div className="flex justify-end gap-2">
+                    {selectedComment.proposedResponse && (
+                      <button
+                        onClick={() => {
+                          setProposedResponseText(selectedComment.proposedResponse || "");
+                          setIsEditingProposedResponse(false);
+                        }}
+                        className="px-3 py-1.5 text-[10px] font-mono uppercase text-gray-600 hover:underline cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    <button
+                      onClick={handleSaveProposedResponse}
+                      className="px-4 py-1.5 bg-[#1A1A1A] hover:bg-black text-white text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer shadow-xs"
+                    >
+                      Save Proposed Response
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5 pt-1">
+                  <p className="text-xs text-amber-950 font-sans leading-relaxed italic bg-white p-3 border border-amber-200">
+                    "{selectedComment.proposedResponse}"
+                  </p>
+                  <div className="flex items-center justify-between text-[9px] font-mono text-amber-800 px-1">
+                    <span>Drafted by: <strong>{selectedComment.proposedResponseBy || "Policy Analyst"}</strong></span>
+                    {selectedComment.proposedResponseAt && <span>Updated: {selectedComment.proposedResponseAt}</span>}
+                  </div>
+                </div>
+              )}
             </div>
 
             {!hasMappedPerspectives && (

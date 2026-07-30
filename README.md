@@ -19,7 +19,7 @@ Modern organizations—including public policy makers, SaaS product teams, munic
 4. **Data Privacy & AI Hallucination Risks**: Sending sensitive consultation datasets or confidential customer complaints to public cloud LLMs creates compliance risks. Furthermore, generic AI summaries frequently introduce "hallucinations"—fabricating ungrounded assumptions not present in the source dataset.
 
 ### The Solution:
-This application bridges the gap by combining **spatial vector analytics**, **stakeholder power-interest weighting**, **custom taxonomy clustering**, and **factually grounded local AI synthesis**. It provides a single visual workbench where leaders can explore semantic relationships, audit duplicates, prioritize stakeholder voices, and export executive-ready reports with complete data privacy. 
+This application bridges the gap by combining **spatial vector analytics**, **stakeholder power-interest weighting**, **custom taxonomy clustering**, and **factually grounded local AI synthesis**. It provides a single visual workbench where leaders can explore semantic relationships, audit duplicates, prioritize stakeholder voices, draft proposed responses, and export executive-ready reports with complete data privacy. 
 
 ---
 
@@ -57,22 +57,31 @@ This application bridges the gap by combining **spatial vector analytics**, **st
 * **Custom Taxonomy Workbench**: Create custom topic tags, reclassify individual or batched comments, merge related themes, rename topics, or delete obsolete categories.
 * **Secondary Topic Matching**: Automatically detects cross-cutting themes that match secondary topics at ≥50% confidence.
 * **Cluster-Specific AI Syntheses**: Generate focused report critiques for individual topic clusters, complete with sentiment breakdowns, prepended stakeholder rosters, and CSV traceability rows.
+* **Sequential Batch Report Generation**: Generate qualitative synthesis reports in automated batches (one report at a time) for selected or all custom topic clusters, with real-time progress tracking and cancellation controls.
+* **Inline Proposed Response Drafting**: Propose official organizational or AI-assisted responses directly within cluster data tables, with visible status flags for responded comments.
 
 ### 🔍 4. Natural Language Semantic Search
 * **Vector-Based Querying**: Search the dataset using natural language concepts (e.g., *"usability friction during checkout"* or *"route delay complaints"*) rather than exact keyword matches.
 * **Cosine Similarity Evaluator**: Calculates angular similarity between the search query vector and all dataset records.
 * **Precision Threshold Cutoff**: Adjustable similarity slider (10% to 95%) to dynamically highlight matching records on the 2D canvas and filter the dataset view.
 
-### 🛡️ 5. AI-Powered Deduplication Audit
+### 💬 5. Comment Response Management & Stakeholder Flagging
+* **Proposed Response Drafting**: Draft official policy or customer service responses to any individual stakeholder comment manually or using one-click AI draft generation (`✨ AI Draft Response`).
+* **Author Role & Timestamp Tagging**: Assign author roles (e.g., *"Policy Analyst"*, *"CX Lead"*) and timestamp metadata to drafted responses.
+* **Visual Response Flagging**: Comments with proposed responses are visibly flagged with `💬 Proposed Response` badges in comments lists, topic cluster tables, and detailed inspector cards.
+* **Response Status Filtering**: Filter feedback datasets by response status (*All*, *💬 Proposed Only*, *No Response Yet*) to streamline review workflows.
+
+### 🛡️ 6. AI-Powered Deduplication Audit
 * **Pairwise Vector Scanner**: Scans datasets for duplicate, near-identical, or redundant feedback entries using cosine distance metrics.
 * **Performance Safeguards**: Automatically caps pairwise deduplication checks at **1,500 records** to eliminate CPU bottlenecks on large datasets while preserving full spatial visualization for all points.
 * **Audit & Merge Actions**: Inspect duplicate clusters, select primary entries, archive redundant records, and export clean, deduplicated datasets or annotated audit logs.
 
-### 📊 6. Executive Synthesis & Critical Review Hub
+### 📊 7. Executive Synthesis & Critical Review Hub
 
 <img width="1037" height="788" alt="Screenshot 2026-07-29 144630" src="https://github.com/user-attachments/assets/d7878e12-2205-4234-9157-0a6ebc50847f" />
 
 * **Stakeholder-Prioritized Reports**: Generates structured Markdown executive reports highlighting critical feedback from top-tier Key Players.
+* **Interactive Report Editor & Copy Engine**: Edit report titles and Markdown source content directly in the Synthesis modal with live side-by-side preview, one-click clipboard copying, and `.md` file export.
 * **Critical Executive Review**: Perform a factual meta-review across all generated syntheses to date. Summarizes existing conclusions without creating ungrounded external data or hallucinated facts.
 * **Structured Output Sections**:
   1. Executive Summary (Overall sentiment & core takeaways)
@@ -83,15 +92,17 @@ This application bridges the gap by combining **spatial vector analytics**, **st
  
 <img width="574" height="378" alt="Screenshot 2026-07-29 144940" src="https://github.com/user-attachments/assets/a3b7fc9d-52ad-41e5-b48e-9a24b6522865" />
 
- 
+### 📄 8. Document Model Context & Reference Mapping
+* **Document Reference Column Mapping**: Map CSV columns containing document section references (e.g., *"Section 3.2"*, *"Clause 4.1"*) directly during import.
+* **Contextual Anchor Linking**: Inspect document reference context alongside stakeholder comments to ground policy reviews in exact source document sections.
 
-### 🌐 7. Standalone Offline HTML Export Snapshot
+### 🌐 9. Standalone Offline HTML Export Snapshot
 * **Self-Contained HTML Dashboard Export**: Export a complete, interactive, offline-ready HTML document (`.html`) containing the entire session snapshot.
 * **Zero Dependencies**: Recipients can open the exported HTML file in any browser without an internet connection, local servers, or software installation.
 * **Interactive Navigation**: Includes tabbed views for Executive Reports, Stakeholder Power-Interest Matrix, Dataset Explorer with live filters, and the Synthesis Reports Hub.
 * **Embedded Session Restoration**: Embeds the raw session data payload directly inside the HTML file with a one-click button to restore state in the main application.
 
-### 🗄️ 8. Flexible Local LLM & Offline-First Engine
+### 🗄️ 10. Flexible Local LLM & Offline-First Engine
 
 <img width="859" height="833" alt="Screenshot 2026-07-29 144429" src="https://github.com/user-attachments/assets/58ecc0ba-34e2-4769-bc87-604ed71c0546" />
 
@@ -112,6 +123,8 @@ This application bridges the gap by combining **spatial vector analytics**, **st
 | **Frictionless Executive Sharing** | Share fully interactive standalone `.html` dashboards with stakeholders that run offline in any web browser. |
 | **Rapid Noise Reduction** | Instantly detect near-duplicate comments and redundant survey submissions with pairwise vector scanning. |
 | **Agile Taxonomy Management** | Effortlessly rename, merge, or reclassify topics on the fly without re-indexing the dataset. |
+| **Automated Batch Synthesis** | Generate qualitative reports across all topic clusters sequentially with zero manual repetition. |
+| **Auditable Response Workflow** | Draft and track official proposed responses with visible flags and status filters across all views. |
 
 ---
 

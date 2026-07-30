@@ -18,6 +18,9 @@ export interface CommentItem {
   documentReference?: string; // Reference to reviewed material (e.g. "Section 3.1", "Clause 4.2", "Page 12")
   clusterConfidence?: number; // Similarity/Confidence score for primary cluster assignment (0.0 to 1.0)
   secondaryTopics?: { topic: string; confidence: number }[]; // Secondary cluster matches >= 50%
+  proposedResponse?: string; // Proposed official or AI response to this feedback comment
+  proposedResponseBy?: string; // Author/Role of proposed response (e.g. "Policy Analyst", "LLM Assistant")
+  proposedResponseAt?: string; // Timestamp when proposed response was drafted or updated
 }
 
 export interface DocumentSection {

@@ -1960,6 +1960,7 @@ Respond using clean, structured markdown with the following headers:
                   onOpenStakeholderModal={handleOpenStakeholderModal}
                   selectedCommentIdGlobal={selectedCommentId}
                   onSelectCommentGlobal={setSelectedCommentId}
+                  onUpdateComment={(updated) => setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))}
                   onSaveSynthesisToHistory={(synth) => {
                     const newHistoryItem: SavedSynthesis = {
                       id: `perspective_${Date.now()}`,
@@ -2020,6 +2021,7 @@ Respond using clean, structured markdown with the following headers:
                     setSelectedCommentId(id);
                     setActiveTab("explore");
                   }}
+                  onUpdateComment={(updated) => setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))}
                   onSaveSynthesisToHistory={(synth) => {
                     const newHistoryItem: SavedSynthesis = {
                       id: `synth_${Date.now()}`,
@@ -2127,6 +2129,11 @@ Respond using clean, structured markdown with the following headers:
         activeSynthesis={activeSynthesis}
         history={synthesisHistory}
         onSelectHistoryItem={(item) => setActiveSynthesis(item)}
+        onUpdateSynthesis={(updated) => {
+          setSynthesisHistory((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+          setActiveSynthesis(updated);
+          showToast(`Saved edits to report "${updated.title}"`, "success");
+        }}
         onDeleteHistoryItem={(id) => {
           setSynthesisHistory((prev) => prev.filter((item) => item.id !== id));
           if (activeSynthesis?.id === id) {
