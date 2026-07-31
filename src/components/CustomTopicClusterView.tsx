@@ -5,7 +5,7 @@ import {
   RefreshCw, Loader2, Info, ChevronRight, Layers, FileSpreadsheet, Check, HelpCircle, Layers2,
   FileText, ChevronDown, ChevronUp, Copy, X
 } from "lucide-react";
-import { CommentItem, LlmSettings, StakeholderMapping } from "../types";
+import { CommentItem, LlmSettings, StakeholderMapping, WhatIfReport } from "../types";
 import { OrganizationBadge } from "./OrganizationBadge";
 import { calculateCosineSimilarity } from "./DuplicateReview";
 import { fetchLocalEmbeddings, getDeterministicPseudoEmbedding, fetchLocalCompletion, generateLocalHeuristicCustomClusterSynthesis } from "../utils/localLlm";
@@ -24,6 +24,8 @@ interface CustomTopicClusterViewProps {
   onSelectComment?: (commentId: string) => void;
   onSaveSynthesisToHistory?: (synthesis: { title: string; markdown: string; source: string }) => void;
   onUpdateComment?: (updatedComment: CommentItem) => void;
+  onOpenWhatIfModal?: (contextType?: "cluster" | "executive" | "synthesis_meta" | "custom_cluster_batch", targetCluster?: string) => void;
+  whatIfReports?: WhatIfReport[];
 }
 
 interface ClusteredCommentItem extends CommentItem {
@@ -66,7 +68,9 @@ export const CustomTopicClusterView: React.FC<CustomTopicClusterViewProps> = ({
   showToast,
   onSelectComment,
   onSaveSynthesisToHistory,
-  onUpdateComment
+  onUpdateComment,
+  onOpenWhatIfModal,
+  whatIfReports = []
 }) => {
   // Extract unique existing cluster column entries from uploaded dataset
   const existingClusterEntries = useMemo(() => {
@@ -1077,6 +1081,20 @@ Directly address the user's feedback while maintaining strict alignment with the
                     <span>Synthesize Cluster</span>
                   </>
                 )}
+              </button>
+
+              <button
+                onClick={() => {
+                  if (onOpenWhatIfModal) {
+                    onOpenWhatIfModal("cluster", currentGroup?.topicName);
+                  }
+                }}
+                disabled={!currentGroup || currentGroup.comments.length === 0}
+                className="px-3.5 py-2 bg-amber-900 hover:bg-black border border-amber-500/60 text-amber-100 disabled:opacity-50 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                title="Run a hypothetical 'What-If' scenario evaluation on this cluster"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                <span>What-If Scenario</span>
               </button>
 
               <button

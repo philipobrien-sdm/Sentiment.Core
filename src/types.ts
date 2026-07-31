@@ -100,6 +100,17 @@ export interface QuadrantInfo {
   priorityWeight: number; // multiplier for report prioritization
 }
 
+export interface WhatIfReport {
+  id: string;
+  scenarioTitle: string; // Brief scenario name, e.g. "What if project budget is reduced by 30%?"
+  hypothesisText: string; // Detailed user prompt or hypothesis
+  contextType: "cluster" | "executive" | "synthesis_meta" | "custom_cluster_batch";
+  targetClusterName?: string; // If cluster specific
+  markdown: string;
+  timestamp: string;
+  commentCount: number;
+}
+
 export function getQuadrantInfo(influence: number = 3, interest: number = 3): QuadrantInfo {
   const isHighInfluence = influence >= 3.0;
   const isHighInterest = interest >= 3.0;

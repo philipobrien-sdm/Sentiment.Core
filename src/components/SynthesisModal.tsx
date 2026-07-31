@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { MarkdownViewer } from "./MarkdownViewer";
-import { X, Calendar, Sparkles, Copy, Download, Trash2, Clock, Map, Layers, FileCheck2, Edit3, Check, Save, Eye } from "lucide-react";
+import { X, Calendar, Sparkles, Copy, Download, Trash2, Clock, Map, Layers, FileCheck2, Edit3, Check, Save, Eye, HelpCircle } from "lucide-react";
+import { WhatIfReport } from "../types";
 
 export interface SavedSynthesis {
   id: string;
@@ -21,6 +22,8 @@ interface SynthesisModalProps {
   onUpdateSynthesis?: (updated: SavedSynthesis) => void;
   onPerformMetaReview?: () => void;
   isSynthesizingMeta?: boolean;
+  onOpenWhatIfModal?: (contextType?: "cluster" | "executive" | "synthesis_meta" | "custom_cluster_batch") => void;
+  whatIfReports?: WhatIfReport[];
 }
 
 export const SynthesisModal: React.FC<SynthesisModalProps> = ({
@@ -34,6 +37,8 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
   onUpdateSynthesis,
   onPerformMetaReview,
   isSynthesizingMeta = false,
+  onOpenWhatIfModal,
+  whatIfReports = []
 }) => {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editingTitle, setEditingTitle] = useState<string>("");
@@ -99,7 +104,18 @@ export const SynthesisModal: React.FC<SynthesisModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {onOpenWhatIfModal && (
+              <button
+                onClick={() => onOpenWhatIfModal("synthesis_meta")}
+                className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 text-[10px] font-mono uppercase tracking-wider font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="Evaluate a hypothetical 'What-If' scenario across all saved synthesis reports"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-amber-300" />
+                <span>What-If Meta Review</span>
+              </button>
+            )}
+
             {history.length > 0 && onPerformMetaReview && (
               <button
                 onClick={onPerformMetaReview}

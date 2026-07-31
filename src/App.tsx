@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { CommentItem, FilterState, LlmSettings, StakeholderMapping, getQuadrantInfo, DocumentSection } from "./types";
+import { CommentItem, FilterState, LlmSettings, StakeholderMapping, getQuadrantInfo, DocumentSection, WhatIfReport } from "./types";
 import { generateDefaultDataset } from "./data/defaultComments";
 import { clusterCommentsDynamically } from "./utils/topicClustering";
 import { VectorPlot } from "./components/VectorPlot";
@@ -17,6 +17,7 @@ import { PromptAssistant } from "./components/PromptAssistant";
 import { CustomTopicClusterView } from "./components/CustomTopicClusterView";
 import { SynthesisModal, SavedSynthesis } from "./components/SynthesisModal";
 import { StakeholderMappingModal } from "./components/StakeholderMappingModal";
+import { WhatIfScenarioModal } from "./components/WhatIfScenarioModal";
 import { OrganizationBadge } from "./components/OrganizationBadge";
 import { getCachedEmbedding, loadEmbeddingsIntoCache, setCachedEmbedding, getCommentEmbedding } from "./utils/embeddingsCache";
 import { 
@@ -196,6 +197,47 @@ export default function App() {
 
   const handleSaveAllStakeholderMappings = (mappings: Record<string, StakeholderMapping>) => {
     setStakeholderMappings(mappings);
+  };
+
+  // What-If Scenario Reports state
+  const [whatIfReports, setWhatIfReports] = useState<WhatIfReport[]>(() => {
+    const saved = localStorage.getItem("what_if_reports");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return [];
+  });
+
+  const [isWhatIfModalOpen, setIsWhatIfModalOpen] = useState<boolean>(false);
+  const [whatIfInitialContext, setWhatIfInitialContext] = useState<"cluster" | "executive" | "synthesis_meta" | "custom_cluster_batch">("executive");
+  const [whatIfInitialCluster, setWhatIfInitialCluster] = useState<string>("");
+
+  useEffect(() => {
+    localStorage.setItem("what_if_reports", JSON.stringify(whatIfReports));
+  }, [whatIfReports]);
+
+  const handleOpenWhatIfModal = (
+    contextType: "cluster" | "executive" | "synthesis_meta" | "custom_cluster_batch" = "executive",
+    targetCluster: string = ""
+  ) => {
+    setWhatIfInitialContext(contextType);
+    setWhatIfInitialCluster(targetCluster);
+    setIsWhatIfModalOpen(true);
+  };
+
+  const handleSaveWhatIfReport = (report: WhatIfReport) => {
+    setWhatIfReports((prev) => [report, ...prev.filter(r => r.id !== report.id)]);
+  };
+
+  const handleDeleteWhatIfReport = (id: string) => {
+    setWhatIfReports((prev) => prev.filter(r => r.id !== id));
+  };
+
+  const handleClearWhatIfReports = () => {
+    setWhatIfReports([]);
   };
 
   // Local discovered models list states
@@ -2034,6 +2076,8 @@ Respond using clean, structured markdown with the following headers:
                     setActiveSynthesis(newHistoryItem);
                     setIsSynthesisModalOpen(true);
                   }}
+                  onOpenWhatIfModal={handleOpenWhatIfModal}
+                  whatIfReports={whatIfReports}
                 />
               )}
 
@@ -2053,6 +2097,8 @@ Respond using clean, structured markdown with the following headers:
                   }}
                   historyCount={synthesisHistory.length}
                   onExportOfflineHtml={handleExportOfflineHtml}
+                  onOpenWhatIfModal={handleOpenWhatIfModal}
+                  whatIfReports={whatIfReports}
                 />
               )}
 
@@ -2146,6 +2192,8 @@ Respond using clean, structured markdown with the following headers:
         }}
         onPerformMetaReview={handlePerformMetaReview}
         isSynthesizingMeta={isSynthesizingMeta}
+        onOpenWhatIfModal={handleOpenWhatIfModal}
+        whatIfReports={whatIfReports}
       />
 
       {/* About & Embeddings Explainer Modal */}
@@ -2176,6 +2224,23 @@ Respond using clean, structured markdown with the following headers:
           setDocumentSections(updated);
           showToast(`Saved ${updated.length} document context section(s)!`, "success");
         }}
+        showToast={showToast}
+      />
+
+      {/* What-If Hypothetical Scenario Evaluator Modal */}
+      <WhatIfScenarioModal
+        isOpen={isWhatIfModalOpen}
+        onClose={() => setIsWhatIfModalOpen(false)}
+        initialContextType={whatIfInitialContext}
+        initialTargetCluster={whatIfInitialCluster}
+        comments={comments}
+        synthesisHistory={synthesisHistory}
+        llmSettings={llmSettings}
+        stakeholderMappings={stakeholderMappings}
+        whatIfReports={whatIfReports}
+        onSaveWhatIfReport={handleSaveWhatIfReport}
+        onDeleteWhatIfReport={handleDeleteWhatIfReport}
+        onClearWhatIfReports={handleClearWhatIfReports}
         showToast={showToast}
       />
     </div>

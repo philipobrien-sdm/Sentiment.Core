@@ -720,5 +720,59 @@ ${uniqueActions.length > 0
 ${history.map((h, i) => `| ${i + 1} | **${h.title}** | \`${h.source || 'cluster'}\` | ${h.timestamp} |`).join("\n")}`;
 }
 
+// Generates a structured What-If scenario report as a heuristic fallback when offline
+export function generateLocalHeuristicWhatIfReport(
+  scenarioTitle: string,
+  hypothesisText: string,
+  contextType: string,
+  comments: { id: string; text: string; sentiment: string; topic?: string; organizationName?: string }[],
+  targetClusterName?: string
+): string {
+  const totalCount = comments.length;
+  const posCount = comments.filter(c => c.sentiment === "positive").length;
+  const negCount = comments.filter(c => c.sentiment === "negative").length;
+  const neuCount = comments.filter(c => c.sentiment === "neutral").length;
+
+  const orgsSet = new Set<string>();
+  comments.forEach(c => {
+    if (c.organizationName?.trim()) orgsSet.add(c.organizationName.trim());
+  });
+  const orgsList = Array.from(orgsSet).sort();
+
+  return `# ⚡ HYPOTHETICAL WHAT-IF EVALUATION: "${scenarioTitle}"
+> **SCENARIO HYPOTHESIS**: *"${hypothesisText}"*
+> **DATA ISOLATION NOTICE**: *This is a hypothetical simulation generated for scenario planning and risk evaluation. It is stored separately in your What-If Sandbox and does NOT alter the core dataset or standard summary reports.*
+
+---
+
+## 1. Executive Scenario Impact Overview
+- **Evaluation Context**: ${contextType === "cluster" ? `Custom Cluster: "${targetClusterName || "Selected Cluster"}"` : contextType === "executive" ? "Full Dataset Executive Synthesis" : "Multi-Report Meta Analysis"}
+- **Evaluated Feedback Records**: ${totalCount} comments
+- **Assumed Scenario Condition**: *"Assuming '${hypothesisText}' is true..."*
+- **Predicted Sentiment Shift**:
+  - Baseline Sentiment: Positive (${posCount}), Neutral (${neuCount}), Negative (${negCount})
+  - **Hypothetical Shift**: Anticipated increase in stakeholder satisfaction among impacted groups, accompanied by a shift from negative/neutral complaints to constructive compliance inquiries.
+
+## 2. Affected Stakeholder & Organizational Analysis
+- **Primary Affected Organizations (${orgsList.length})**: ${orgsList.slice(0, 6).join(", ") || "General Public"}
+- **Predicted Stakeholder Reaction**:
+  - **Key Players**: Likely to demand clear timelines and documented policy assurances under this scenario.
+  - **End Users**: High interest in immediate practical benefits and service reliability.
+
+## 3. New Opportunities & Unintended Risk Factors
+1. **Opportunity - Accelerated Alignment**: Assuming "${hypothesisText}" comes to fruition, friction in key feedback categories (${targetClusterName || "primary topics"}) is substantially reduced.
+2. **Risk Factor - Secondary Operational Bottlenecks**: Implementation of this scenario may shift pressure onto engineering and support capacity.
+3. **Compliance Risk**: Requires updating official documentation references to align with the new hypothetical status.
+
+## 4. Adjusted Strategic Action Plan
+1. **Scenario Mitigation Protocol**: Establish a task force to prepare operational workflows if this scenario is enacted.
+2. **Targeted Stakeholder Communication**: Proactively briefing ${orgsList.slice(0, 3).join(", ") || "impacted organizations"} on potential policy transitions.
+3. **Monitor Ripple Effects**: Track secondary feedback clusters for unexpected sentiment fluctuations under the new assumption.
+
+---
+*Generated via What-If Scenario Simulator for ${totalCount} feedback records.*`;
+}
+
+
 
 

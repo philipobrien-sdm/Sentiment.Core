@@ -1,6 +1,6 @@
 import React from "react";
-import { CommentItem } from "../types";
-import { Sparkles, FileText, Download, Loader2, ArrowRight, History, Globe } from "lucide-react";
+import { CommentItem, WhatIfReport } from "../types";
+import { Sparkles, FileText, Download, Loader2, ArrowRight, History, Globe, HelpCircle } from "lucide-react";
 import { MarkdownViewer } from "./MarkdownViewer";
 
 interface ExecutiveReportProps {
@@ -12,6 +12,8 @@ interface ExecutiveReportProps {
   onOpenHistory?: () => void;
   historyCount?: number;
   onExportOfflineHtml?: () => void;
+  onOpenWhatIfModal?: (contextType?: "cluster" | "executive" | "synthesis_meta" | "custom_cluster_batch") => void;
+  whatIfReports?: WhatIfReport[];
 }
 
 export const ExecutiveReport: React.FC<ExecutiveReportProps> = ({
@@ -23,8 +25,11 @@ export const ExecutiveReport: React.FC<ExecutiveReportProps> = ({
   onOpenHistory,
   historyCount = 0,
   onExportOfflineHtml,
+  onOpenWhatIfModal,
+  whatIfReports = []
 }) => {
   const activeComments = comments.filter((c) => !c.isArchived);
+  const executiveWhatIfCount = whatIfReports.filter(r => r.contextType === "executive").length;
 
   // Trigger export of report to a Text/Markdown file
   const handleExportReport = () => {
@@ -42,13 +47,13 @@ export const ExecutiveReport: React.FC<ExecutiveReportProps> = ({
   return (
     <div className="bg-white border border-[#E5E3DF] rounded-none flex flex-col min-h-[480px] shadow-none animate-in fade-in duration-300">
       {/* Header bar */}
-      <div className="px-6 py-4 border-b border-[#E5E3DF] flex items-center justify-between bg-[#F9F8F6]/45">
+      <div className="px-6 py-4 border-b border-[#E5E3DF] flex flex-wrap items-center justify-between gap-3 bg-[#F9F8F6]/45">
         <div className="flex items-center gap-3">
           <FileText className="w-4 h-4 text-[#1A1A1A]" />
-          <h2 className="font-serif italic text-base text-[#1A1A1A]">Executive Synthesis & Common Themes</h2>
+          <h2 className="font-serif italic text-base text-[#1A1A1A]">Executive Synthesis &amp; Common Themes</h2>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {apiMode === "live" ? (
             <span className="text-[10px] bg-[#4A6741]/10 border border-[#4A6741]/20 text-[#4A6741] px-2.5 py-1 rounded-none font-semibold font-mono uppercase tracking-wider">
               Gemini LLM Active
@@ -57,6 +62,16 @@ export const ExecutiveReport: React.FC<ExecutiveReportProps> = ({
             <span className="text-[10px] bg-[#A13D2D]/10 border border-[#A13D2D]/20 text-[#A13D2D] px-2.5 py-1 rounded-none font-semibold font-mono uppercase tracking-wider">
               Local Heuristics
             </span>
+          )}
+
+          {onOpenWhatIfModal && (
+            <button
+              onClick={() => onOpenWhatIfModal("executive")}
+              className="px-3 py-1.5 border border-amber-600 bg-amber-50 hover:bg-amber-100 text-amber-950 rounded-none text-[10px] uppercase tracking-widest font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title="Run a hypothetical What-If scenario simulation over full dataset"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-amber-600" /> What-If Scenario {executiveWhatIfCount > 0 ? `(${executiveWhatIfCount})` : ""}
+            </button>
           )}
 
           {onOpenHistory && (
