@@ -1021,137 +1021,201 @@ Directly address the user's feedback while maintaining strict alignment with the
       {hasRunClustering && (
         <div className="space-y-4">
           
-          {/* Main Dropdown & Export Header */}
-          <div className="bg-[#1A1A1A] text-white p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border-l-4 border-[#4A6741]">
-            <div className="flex-1 space-y-1">
-              <label className="block text-[9px] font-mono text-gray-400 uppercase tracking-widest font-bold">
-                Select Primary Cluster Topic View
-              </label>
-              
-              <div className="flex items-center gap-3">
-                <select
-                  value={selectedTopic}
-                  onChange={(e) => setSelectedTopic(e.target.value)}
-                  className="bg-white text-[#1A1A1A] border-none px-3.5 py-2 text-sm font-bold focus:outline-none rounded-none cursor-pointer w-full max-w-md shadow-xs"
-                >
-                  {clusterGroups.map((group) => (
-                    <option key={group.topicName} value={group.topicName}>
-                      {group.topicName} ({group.comments.length} primary item{group.comments.length === 1 ? "" : "s"})
-                    </option>
-                  ))}
-                  {unassignedComments.length > 0 && (
-                    <option value="Unassigned / Low Confidence">
-                      Unassigned / Low Confidence ({unassignedComments.length} item{unassignedComments.length === 1 ? "" : "s"})
-                    </option>
-                  )}
-                </select>
+          {/* Main Cluster Navigation & Action Toolbar */}
+          <div className="bg-[#1A1A1A] text-white p-4 space-y-4 border-l-4 border-[#4A6741]">
+            
+            {/* Row 1: Cluster Selector Header with Stepper Controls */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/10">
+              <div className="space-y-1 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-mono text-amber-400 uppercase tracking-widest font-bold">
+                    Primary Topic Cluster View
+                  </span>
+                  <span className="text-[10px] bg-white/10 text-gray-300 font-mono px-2 py-0.5 font-semibold">
+                    {clusterGroups.length} Clusters Generated
+                  </span>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {/* Prev Cluster Button */}
+                  <button
+                    onClick={() => {
+                      const idx = clusterGroups.findIndex(g => g.topicName === selectedTopic);
+                      if (idx > 0) {
+                        setSelectedTopic(clusterGroups[idx - 1].topicName);
+                      } else if (clusterGroups.length > 0) {
+                        setSelectedTopic(clusterGroups[clusterGroups.length - 1].topicName);
+                      }
+                    }}
+                    disabled={clusterGroups.length <= 1}
+                    className="p-2 bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white transition-colors cursor-pointer"
+                    title="Previous Cluster"
+                  >
+                    <ChevronDown className="w-4 h-4 rotate-90" />
+                  </button>
 
-                <span className="hidden sm:inline-block text-xs font-mono text-gray-300">
-                  {currentGroup ? `${currentGroup.comments.length} items (${currentGroup.secondaryMatchesCount} with secondary tags)` : ""}
-                </span>
+                  {/* Main Dropdown */}
+                  <select
+                    value={selectedTopic}
+                    onChange={(e) => setSelectedTopic(e.target.value)}
+                    className="bg-white text-[#1A1A1A] border-none px-3.5 py-2 text-sm font-bold focus:outline-none rounded-none cursor-pointer flex-1 max-w-lg shadow-xs"
+                  >
+                    {clusterGroups.map((group) => (
+                      <option key={group.topicName} value={group.topicName}>
+                        {group.topicName} ({group.comments.length} primary item{group.comments.length === 1 ? "" : "s"})
+                      </option>
+                    ))}
+                    {unassignedComments.length > 0 && (
+                      <option value="Unassigned / Low Confidence">
+                        Unassigned / Low Confidence ({unassignedComments.length} item{unassignedComments.length === 1 ? "" : "s"})
+                      </option>
+                    )}
+                  </select>
+
+                  {/* Next Cluster Button */}
+                  <button
+                    onClick={() => {
+                      const idx = clusterGroups.findIndex(g => g.topicName === selectedTopic);
+                      if (idx >= 0 && idx < clusterGroups.length - 1) {
+                        setSelectedTopic(clusterGroups[idx + 1].topicName);
+                      } else if (clusterGroups.length > 0) {
+                        setSelectedTopic(clusterGroups[0].topicName);
+                      }
+                    }}
+                    disabled={clusterGroups.length <= 1}
+                    className="p-2 bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white transition-colors cursor-pointer"
+                    title="Next Cluster"
+                  >
+                    <ChevronDown className="w-4 h-4 -rotate-90" />
+                  </button>
+                </div>
               </div>
+
+              {/* Active Cluster Stats Badge */}
+              {currentGroup && (
+                <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-2 text-xs font-mono shrink-0">
+                  <div className="text-right">
+                    <div className="font-bold text-amber-300">{currentGroup.comments.length} Primary Items</div>
+                    <div className="text-[10px] text-gray-400">
+                      {currentGroup.secondaryMatchesCount} with secondary tags
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Actions: Apply to Main Dataset, Synthesize Cluster & Export CSV */}
-            <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-white/10">
-              <label className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase text-amber-100 bg-white/10 hover:bg-white/20 border border-white/20 px-2.5 py-2 cursor-pointer transition-colors select-none shadow-xs" title="Include existing drafted proposed responses in cluster synthesis report">
-                <input
-                  type="checkbox"
-                  checked={includeProposedResponses}
-                  onChange={(e) => setIncludeProposedResponses(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-amber-400 cursor-pointer"
-                />
-                <span>Include Responses ({currentGroup?.comments.filter(c => c.proposedResponse && c.proposedResponse.trim().length > 0).length || 0})</span>
-              </label>
+            {/* Row 2: Action Toolbars Organized into Groups */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              
+              {/* Group A: Cluster AI Synthesis & Scenario Intelligence */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] font-mono text-gray-400 uppercase tracking-wider font-bold w-full sm:w-auto mr-1">
+                  AI Actions:
+                </span>
 
-              <button
-                onClick={handleSynthesizeClusterComments}
-                disabled={isSynthesizingCluster || !currentGroup || currentGroup.comments.length === 0}
-                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-700 disabled:text-gray-400 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
-                title="Run AI synthesis and stakeholder report on comments in this cluster"
-              >
-                {isSynthesizingCluster ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-200" />
-                    <span>Synthesizing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                    <span>Synthesize Cluster</span>
-                  </>
-                )}
-              </button>
+                <button
+                  onClick={handleSynthesizeClusterComments}
+                  disabled={isSynthesizingCluster || !currentGroup || currentGroup.comments.length === 0}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-700 disabled:text-gray-400 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                  title="Run AI synthesis and stakeholder report on comments in this cluster"
+                >
+                  {isSynthesizingCluster ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-200" />
+                      <span>Synthesizing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                      <span>Synthesize Cluster</span>
+                    </>
+                  )}
+                </button>
 
-              <button
-                onClick={() => {
-                  if (onOpenWhatIfModal) {
-                    onOpenWhatIfModal("cluster", currentGroup?.topicName);
-                  }
-                }}
-                disabled={!currentGroup || currentGroup.comments.length === 0}
-                className="px-3.5 py-2 bg-amber-900 hover:bg-black border border-amber-500/60 text-amber-100 disabled:opacity-50 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
-                title="Run a hypothetical 'What-If' scenario evaluation on this cluster"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-                <span>What-If Scenario</span>
-              </button>
+                <button
+                  onClick={() => {
+                    if (onOpenWhatIfModal) {
+                      onOpenWhatIfModal("cluster", currentGroup?.topicName, clusterGroups);
+                    }
+                  }}
+                  disabled={!currentGroup || currentGroup.comments.length === 0}
+                  className="px-3.5 py-2 bg-amber-900 hover:bg-black border border-amber-500/60 text-amber-100 disabled:opacity-50 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                  title="Run a hypothetical 'What-If' scenario evaluation on this cluster"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                  <span>What-If Scenario</span>
+                </button>
 
-              <button
-                onClick={() => {
-                  if (!currentGroup || currentGroup.comments.length === 0) {
-                    showToast("No comments in selected cluster to answer.", "error");
-                    return;
-                  }
-                  setIsBatchAnswerModalOpen(true);
-                }}
-                disabled={!currentGroup || currentGroup.comments.length === 0}
-                className="px-3.5 py-2 bg-amber-950 hover:bg-black border border-amber-600/40 text-amber-200 disabled:opacity-50 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
-                title="Batch answer all comments in this cluster using the cluster synthesis report for context"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Batch Answer Comments</span>
-              </button>
+                <button
+                  onClick={() => {
+                    if (!currentGroup || currentGroup.comments.length === 0) {
+                      showToast("No comments in selected cluster to answer.", "error");
+                      return;
+                    }
+                    setIsBatchAnswerModalOpen(true);
+                  }}
+                  disabled={!currentGroup || currentGroup.comments.length === 0}
+                  className="px-3.5 py-2 bg-amber-950 hover:bg-black border border-amber-600/40 text-amber-200 disabled:opacity-50 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                  title="Batch answer all comments in this cluster using the cluster synthesis report for context"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Batch Answer</span>
+                </button>
 
-              <button
-                onClick={() => {
-                  const nonEmpties = clusterGroups.filter(g => g.comments.length > 0).map(g => g.topicName);
-                  setSelectedBatchTopics(new Set(nonEmpties));
-                  setIsBatchModalOpen(true);
-                }}
-                className="px-3.5 py-2 bg-amber-800 hover:bg-amber-900 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
-                title="Synthesize reports in batches (one report at a time) for selected or all clusters"
-              >
-                <Layers className="w-3.5 h-3.5 text-amber-300" />
-                <span>Batch Synthesize ({clusterGroups.filter(g => g.comments.length > 0).length})</span>
-              </button>
+                <button
+                  onClick={() => {
+                    const nonEmpties = clusterGroups.filter(g => g.comments.length > 0).map(g => g.topicName);
+                    setSelectedBatchTopics(new Set(nonEmpties));
+                    setIsBatchModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 bg-amber-800 hover:bg-amber-900 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                  title="Synthesize reports in batches (one report at a time) for selected or all clusters"
+                >
+                  <Layers className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Batch Synthesize ({clusterGroups.filter(g => g.comments.length > 0).length})</span>
+                </button>
+              </div>
 
-              <button
-                onClick={handleApplyToMainDataset}
-                className="px-3.5 py-2 bg-[#4A6741] hover:bg-[#3D5535] text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
-                title="Apply primary & secondary cluster assignments across all tabs"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Apply to Dataset</span>
-              </button>
+              {/* Group B: Dataset Sync & Export Controls */}
+              <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-white/10">
+                <label className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase text-amber-100 bg-white/10 hover:bg-white/20 border border-white/20 px-2.5 py-2 cursor-pointer transition-colors select-none shadow-xs" title="Include existing drafted proposed responses in cluster synthesis report">
+                  <input
+                    type="checkbox"
+                    checked={includeProposedResponses}
+                    onChange={(e) => setIncludeProposedResponses(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-amber-400 cursor-pointer"
+                  />
+                  <span>Responses ({currentGroup?.comments.filter(c => c.proposedResponse && c.proposedResponse.trim().length > 0).length || 0})</span>
+                </label>
 
-              <button
-                onClick={() => handleExportCSV(false)}
-                className="px-3 py-2 border border-white/20 hover:bg-white/10 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
-                title="Export this cluster with secondary topic matches to CSV"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export Cluster</span>
-              </button>
+                <button
+                  onClick={handleApplyToMainDataset}
+                  className="px-3.5 py-2 bg-[#4A6741] hover:bg-[#3D5535] text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                  title="Apply primary & secondary cluster assignments across all tabs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Apply to Dataset</span>
+                </button>
 
-              <button
-                onClick={() => handleExportCSV(true)}
-                className="px-3 py-2 border border-white/20 hover:bg-white/10 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
-                title="Export all custom clusters with secondary matches to CSV"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-green-400" />
-                <span>Export All</span>
-              </button>
+                <button
+                  onClick={() => handleExportCSV(false)}
+                  className="px-3 py-2 border border-white/20 hover:bg-white/10 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
+                  title="Export this cluster with secondary topic matches to CSV"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export Cluster</span>
+                </button>
+
+                <button
+                  onClick={() => handleExportCSV(true)}
+                  className="px-3 py-2 border border-white/20 hover:bg-white/10 text-white text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
+                  title="Export all custom clusters with secondary matches to CSV"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-green-400" />
+                  <span>Export All</span>
+                </button>
+              </div>
+
             </div>
           </div>
 

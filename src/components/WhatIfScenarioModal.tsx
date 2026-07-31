@@ -54,7 +54,45 @@ export const WhatIfScenarioModal: React.FC<WhatIfScenarioModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<"evaluate" | "sandbox">("evaluate");
   const [contextType, setContextType] = useState<"cluster" | "executive" | "synthesis_meta" | "custom_cluster_batch">(initialContextType);
-  const [selectedCluster, setSelectedCluster] = useState<string>(initialTargetCluster || (clusterGroups[0]?.topicName || ""));
+  
+  // Derive available topic clusters if clusterGroups prop is empty
+  const availableClusters = useMemo(() => {
+    if (clusterGroups && clusterGroups.length > 0) {
+      return clusterGroups;
+    }
+    // Extract unique topics from comments dataset
+    const map = new Map<string, CommentItem[]>();
+    comments.filter(c => !c.isArchived).forEach(c => {
+      const t = c.topic?.trim() || c.preAssignedTopic?.trim();
+      if (
+        t && 
+        t !== "" && 
+        t !== "Unassigned" && 
+        t !== "Unassigned / General" && 
+        t !== "Unassigned / Low Confidence" && 
+        t !== "General Feedback"
+      ) {
+        if (!map.has(t)) map.set(t, []);
+        map.get(t)!.push(c);
+      }
+    });
+
+    if (map.size === 0) {
+      // Fallback: group by preAssignedTopic if present
+      comments.filter(c => !c.isArchived).forEach(c => {
+        const t = c.preAssignedTopic?.trim() || "General Feedback";
+        if (!map.has(t)) map.set(t, []);
+        map.get(t)!.push(c);
+      });
+    }
+
+    return Array.from(map.entries()).map(([topicName, groupComments]) => ({
+      topicName,
+      comments: groupComments
+    }));
+  }, [clusterGroups, comments]);
+
+  const [selectedCluster, setSelectedCluster] = useState<string>(initialTargetCluster || (availableClusters[0]?.topicName || ""));
   const [scenarioPrompt, setScenarioPrompt] = useState<string>("");
   const [scenarioTitle, setScenarioTitle] = useState<string>("");
   const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
@@ -67,11 +105,11 @@ export const WhatIfScenarioModal: React.FC<WhatIfScenarioModalProps> = ({
       setContextType(initialContextType);
       if (initialTargetCluster) {
         setSelectedCluster(initialTargetCluster);
-      } else if (clusterGroups.length > 0) {
-        setSelectedCluster(clusterGroups[0].topicName);
+      } else if (availableClusters.length > 0) {
+        setSelectedCluster(availableClusters[0].topicName);
       }
     }
-  }, [isOpen, initialContextType, initialTargetCluster]);
+  }, [isOpen, initialContextType, initialTargetCluster, availableClusters]);
 
   if (!isOpen) return null;
 
@@ -79,7 +117,7 @@ export const WhatIfScenarioModal: React.FC<WhatIfScenarioModalProps> = ({
   const activeCommentsForContext = () => {
     const unarchived = comments.filter(c => !c.isArchived);
     if (contextType === "cluster" && selectedCluster) {
-      const group = clusterGroups.find(g => g.topicName === selectedCluster);
+      const group = availableClusters.find(g => g.topicName === selectedCluster);
       return group ? group.comments : unarchived;
     }
     return unarchived;
@@ -347,13 +385,17 @@ Format as clean, elegant Markdown:
                           <select
                             value={selectedCluster}
                             onChange={(e) => setSelectedCluster(e.target.value)}
-                            className="w-full border border-amber-300 bg-white p-2 text-xs font-semibold text-[#1A1A1A] focus:outline-hidden"
+                            className="w-full border border-amber-300 bg-white p-2.5 text-xs font-bold text-[#1A1A1A] focus:outline-hidden cursor-pointer shadow-xs"
                           >
-                            {clusterGroups.map(g => (
-                              <option key={g.topicName} value={g.topicName}>
-                                Cluster: "{g.topicName}" ({g.comments.length} comments)
-                              </option>
-                            ))}
+                            {availableClusters.length === 0 ? (
+                              <option value="">No topic clusters available</option>
+                            ) : (
+                              availableClusters.map(g => (
+                                <option key={g.topicName} value={g.topicName}>
+                                  Cluster: "{g.topicName}" ({g.comments.length} comments)
+                                </option>
+                              ))
+                            )}
                           </select>
                         </div>
                       )}
